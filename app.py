@@ -12,7 +12,7 @@ def get_db():
     try: return conn.read(worksheet="Users", ttl=0)
     except: return None
 
-# --- [2] 평가 데이터 (상세 기준 100% 반영) ---
+# --- [2] 평가 데이터 (상세 기준 포함) ---
 EVAL_DATA = {
     "KO": {
         "1. 업무실적": {
@@ -22,13 +22,13 @@ EVAL_DATA = {
         "2. 근무태도": {
             "협조성": {"횡적협조": "동료와 협력하며 조직 전체의 능률향상에 공헌하는가?", "존중": "팀 전체의 의견을 존중하는가?", "상사협조": "상사에 대해 협력하며 성과가 있는가?"},
             "근무의욕": {"적극성": "일에 능동적으로 대처하려는 의욕은 어떤가?", "책임감": "성실하게 일하려는 의욕은 어떤가?", "연구심": "깊게 연구하려는 의욕은 어떤가?"},
-            "복무상황": {"규율": "규칙을 준수하며 직장질서유지에 애쓰는가?", "DB화": "업무 데이터의 체계적인 관리(공유드라이브 등)", "근태상황": "지각, 조퇴, 결근 등 상황은 어떤가?"}
+            "복무상황": {"규율": "규칙 준수?", "DB화": "업무 데이터 관리?", "근태상황": "지각/조퇴/결근 등"}
         },
         "3. 직무능력": {
             "지식": {"직무지식": "담당업무의 지식이 넓고 깊은가?", "관련지식": "관련 기초지식은 넓고 깊은가?"},
             "이해판단력": {"신속성": "이해 속도가 빠른가?", "타당성": "판단 결과와 결론은 타당한가?", "문제해결": "본질 파악 및 해결 주도?", "통찰력": "요점을 파악하고 자적 결론을 내는가?"},
             "창의연구력": { "연구개선": "항상 창의적인 아이디어를 살리고 일의 개선을 도모하는가?" },
-            "표현절충": {"구두표현": "보고, 설명 등 말하기 능력?", "문장표현": "기안, 리포트 등 글쓰기 능력?", "절충": "대내외 관계자 교섭 및 절충 능력?"}
+            "표현절충": {"구두표현": "말하기 능력?", "문장표현": "글쓰기 능력?", "절충": "교섭 및 절충 능력?"}
         }
     },
     "EN": {
@@ -51,8 +51,8 @@ EVAL_DATA = {
 }
 
 LEADER_DATA = {
-    "KO": { "리더십 역량": { "기본역량": {"고객지향": "내부 혹은 외부 고객의 요구를 능동적으로 찾아내고 적시에 대응한다", "책임감": "계획적으로 행동한다", "팀워크지향": "의견을 공유하고 배경을 설명한다"}, "실행역량": {"개방적의사소통": "자신의 사적인 부분을 먼저 이야기한다", "문제해결": "근본원인을 규명한다", "조직이해": "전략, 운영방식, 역사 등을 파악한다", "프로젝트관리": "계획을 수립한다"}, "전문역량": {"분석적사고": "필요 정보를 정확히 파악한다", "세밀한업무처리": "규정이나 관행 등을 조사한다"} } },
-    "EN": { "Leadership Competency": { "Core": {"Customer Focus": "Respond to needs.", "Responsibility": "Act independently.", "Teamwork": "Share opinions."}, "Execution": {"Communication": "Share personal aspects.", "Problem Solving": "Identify root causes.", "Org Insight": "Understand strategy.", "Project Mgmt": "Establish plans."}, "Professional": {"Analytical": "Identify data.", "Detailed": "Investigate regulations."} } }
+    "KO": { "리더십 역량": { "기본역량": {"고객지향": "고객 요구 적시 대응", "책임감": "계획적 행동", "팀워크지향": "의견 공유 및 배경 설명"}, "실행역량": {"개방적의사소통": "자신의 사적인 부분 먼저 이야기", "문제해결": "근본원인 규명", "조직이해": "전략/역사 파악", "프로젝트관리": "체계적 수립"}, "전문역량": {"분석적사고": "필요 정보 파악", "세밀한업무처리": "규정/관행 조사"} } },
+    "EN": { "Leadership": { "Core": {"Customer Focus": "Respond to needs.", "Responsibility": "Act independently.", "Teamwork": "Share opinions."}, "Execution": {"Communication": "Share personal aspects.", "Problem Solving": "Identify root causes.", "Org Insight": "Understand strategy.", "Project Mgmt": "Establish plans."}, "Professional": {"Analytical": "Identify data.", "Detailed": "Investigate regulations."} } }
 }
 
 REPORT_UI = {
@@ -61,8 +61,8 @@ REPORT_UI = {
 }
 
 UI = {
-    "KO": {"m1": "📝 자기고과 작성", "m2": "👥 2차 팀원평가", "m3": "⚖️ 3차 최종평가", "m4": "📊 관리자 대시보드", "m5": "🚀 리더십 자기평가", "m6": "🎖️ 2차 리더십평가", "sub": "✅ 최종 제출", "save": "💾 임시 저장", "already": "✅ 최종 제출이 완료되었습니다.", "err": "⚠️ 근거를 상세히 작성해 주세요.", "report_title": "🚀 자기 성장 REPORT", "score": "점수", "basis": "근거 (상세히 작성)", "basis_msg": "※ 점수 산출 근거를 상세히 작성해 주세요", "target": "대상 선택", "self_info": "본인 입력", "done_msg": "저장되었습니다!"},
-    "EN": {"m1": "📝 Self-Eval", "m2": "👥 2nd Eval", "m3": "⚖️ 3rd Final", "m4": "📊 Admin Dashboard", "m5": "🚀 Leadership Eval", "m6": "🎖️ 2nd Leadership", "sub": "✅ Final Submit", "save": "💾 Save Draft", "already": "✅ Submission completed.", "err": "⚠️ Provide detailed basis.", "report_title": "🚀 Growth REPORT", "score": "Score", "basis": "Basis", "target": "Target", "self_info": "Self-Input", "done_msg": "Saved!"}
+    "KO": {"m1": "📝 자기고과 작성", "m2": "👥 2차 팀원평가", "m3": "⚖️ 3차 최종평가", "m4": "📊 관리자 대시보드", "m5": "🚀 리더십 자기평가", "m6": "🎖️ 2차 리더십평가", "sub": "✅ 최종 제출", "save": "💾 임시 저장", "already": "✅ 최종 제출이 완료되었습니다.", "err": "⚠️ 모든 항목의 근거를 상세히 작성해야 최종 제출이 가능합니다.", "report_title": "🚀 자기 성장 REPORT", "score": "점수", "basis": "근거 (상세히 작성)", "basis_msg": "※ 점수 산출 근거를 상세히 작성해 주세요", "target": "대상 선택", "self_info": "본인 입력", "done_msg": "성공적으로 저장되었습니다!"},
+    "EN": {"m1": "📝 Self-Evaluation", "m2": "👥 2nd Evaluation", "m3": "⚖️ 3rd Final Review", "m4": "📊 Admin Dashboard", "m5": "🚀 Leadership Self-Eval", "m6": "🎖️ 2nd Leadership Eval", "sub": "✅ Final Submit", "save": "💾 Save Draft", "already": "✅ Final submission completed.", "err": "⚠️ Please provide detailed reasons for all fields.", "report_title": "🚀 Self-Growth REPORT", "score": "Score", "basis": "Basis (In detail)", "basis_msg": "※ Please provide detailed reasons", "target": "Select Target", "self_info": "Self-Input", "done_msg": "Saved Successfully!"}
 }
 
 # --- [3] 데이터 처리 함수 ---
@@ -71,9 +71,8 @@ def save_with_cleanup(recs, user_id, target_id, is_final, ws_name="Results"):
         df = conn.read(worksheet=ws_name, ttl=0)
         if df is None: df = pd.DataFrame()
         if not df.empty:
-            # 저장/제출 시 기존 Draft 데이터는 무조건 삭제
             df = df[~((df['평가자'] == user_id) & (df['피평가자'] == target_id) & (df['구분'].str.contains("Draft", na=False)))]
-            if is_final: # 최종 제출 시 이전 모든 기록(리포트 포함) 정리
+            if is_final:
                 df = df[~((df['평가자'] == user_id) & (df['피평가자'] == target_id))]
         f_df = pd.concat([df, pd.DataFrame(recs)], ignore_index=True)
         conn.update(worksheet=ws_name, data=f_df)
@@ -81,7 +80,7 @@ def save_with_cleanup(recs, user_id, target_id, is_final, ws_name="Results"):
         return True
     except: return False
 
-# --- [4] 메인 실행 ---
+# --- [4] 메인 로직 ---
 db_raw = get_db()
 if 'auth' not in st.session_state: 
     st.session_state.update({'auth':False,'user':'','ldr':'N','lang':'KO'})
@@ -108,14 +107,12 @@ if db_raw is not None:
         if t2: m_list += [L["m2"], L["m6"]]
         if t3: m_list.append(L["m3"])
         if user == "권정순": m_list.append(L["m4"])
-        
         menu = st.sidebar.radio("Menu", m_list)
 
         def render_form(data_dict, pre, self_info=None, eval_type="자기", ws_name="Results"):
             target = st.session_state.get('cur_target', user)
             check_df = res_df if ws_name == "Results" else ld_df
             
-            # [복구] 기존 제출 및 임시저장 데이터 로드
             existing = check_df[(check_df['평가자']==user) & (check_df['피평가자']==target)]
             is_final_done = not existing[existing['구분'].str.contains("Final|최종|2차\(Final\)|3차\(Final\)", na=False)].empty
             draft_vals = existing[existing['구분'].str.contains("Draft", na=False)]
@@ -134,17 +131,22 @@ if db_raw is not None:
                             for sub, items in subs.items():
                                 st.markdown(f"#### 📍 {sub}")
                                 for it, crit in items.items():
-                                    # 기존 데이터 로드 로직
+                                    # [핵심] nan 소거 로직: 데이터가 NaN이면 빈 문자열("")로 변환
                                     saved = draft_vals[draft_vals['항목']==it]
-                                    init_score = int(saved.iloc[0]['점수']) if not saved.empty else 3
-                                    init_basis = saved.iloc[0]['근거'] if not saved.empty else ""
+                                    score_raw = saved.iloc[0]['점수'] if not saved.empty else 3
+                                    basis_raw = saved.iloc[0]['근거'] if not saved.empty else ""
+                                    
+                                    init_score = int(score_raw) if pd.notna(score_raw) and str(score_raw).isdigit() else 3
+                                    init_basis = str(basis_raw) if pd.notna(basis_raw) and str(basis_raw).lower() != "nan" else ""
 
                                     c1, c2, c3, c4 = st.columns([2, 3, 1, 3])
                                     lbl = f"**{it}**"
                                     if self_info and it in self_info:
-                                        lbl += f"<br><span style='color:blue; font-size:0.85em;'>[{L['self_info']}] {self_info[it]['score']}점</span>"
-                                        if self_info[it]['basis']:
-                                            lbl += f"<br><span style='color:#0056b3; font-size:0.75em;'>ㄴ근거: {self_info[it]['basis']}</span>"
+                                        s_val = self_info[it]['score']
+                                        b_val = self_info[it]['basis']
+                                        lbl += f"<br><span style='color:blue; font-size:0.85em;'>[{L['self_info']}] {s_val}점</span>"
+                                        if pd.notna(b_val) and str(b_val).lower() != "nan":
+                                            lbl += f"<br><span style='color:#0056b3; font-size:0.75em;'>ㄴ근거: {b_val}</span>"
                                     
                                     c1.markdown(lbl, unsafe_allow_html=True); c2.info(crit)
                                     s = c3.selectbox(L["score"], [1,2,3,4,5], index=init_score-1, key=f"s_{pre}_{target}_{it}")
@@ -156,13 +158,18 @@ if db_raw is not None:
                         st.divider(); st.subheader(L["report_title"])
                         for k, v in REPORT_UI[lang].items():
                             saved_rep = existing[(existing['구분']=="리포트") & (existing['항목']==v)]
-                            init_rep = saved_rep.iloc[0]['근거'] if not saved_rep.empty else ""
+                            rep_raw = saved_rep.iloc[0]['근거'] if not saved_rep.empty else ""
+                            init_rep = str(rep_raw) if pd.notna(rep_raw) and str(rep_raw).lower() != "nan" else ""
                             rep_data[k] = st.text_area(v, value=init_rep, key=f"rep_{k}")
 
                     c1, c2 = st.columns(2)
-                    if c1.form_submit_button(L["save"]) or c2.form_submit_button(L["sub"]):
-                        is_f = c2.form_submit_button(L["sub"])
-                        if is_f and any(len(v["basis"].strip()) < 2 for v in res_dict.values()): st.error(L["err"])
+                    save_btn, final_btn = c1.form_submit_button(L["save"]), c2.form_submit_button(L["sub"])
+
+                    if save_btn or final_btn:
+                        is_f = True if final_btn else False
+                        # nan 글자가 그대로 저장되는 것을 방지하기 위해 한 번 더 체크
+                        if is_f and any(len(str(v["basis"]).strip()) < 2 or str(v["basis"]).lower() == "nan" for v in res_dict.values()): 
+                            st.error(L["err"])
                         else:
                             now = (datetime.datetime.now()+timedelta(hours=9)).strftime("%Y-%m-%d %H:%M")
                             stt = "Final" if is_f else "Draft"
@@ -185,12 +192,15 @@ if db_raw is not None:
                 rd = res_df[(res_df['피평가자']==target)&(res_df['구분']=="리포트")]
                 if not rd.empty:
                     with st.expander(f"📌 {target}님의 성장 리포트"):
-                        for _, r in rd.iterrows(): st.markdown(f"**{r['항목']}**"); st.info(r['근거'])
+                        for _, r in rd.iterrows():
+                            r_val = r['근거']
+                            st.markdown(f"**{r['항목']}**")
+                            st.info(r_val if pd.notna(r_val) and str(r_val).lower() != "nan" else "내용 없음")
                 render_form(EVAL_DATA[lang], f"ev_{target}", si, eval_type=ml)
         elif menu == L["m6"]:
-            ldr_targets = db_raw[(db_raw['2차평가자']==user)&(db_raw['리더여부']=='Y')]['성명'].tolist()
-            if ldr_targets:
-                target = st.selectbox(L["target"], ldr_targets)
+            ldr_t = db_raw[(db_raw['2차평가자']==user)&(db_raw['리더여부']=='Y')]['성명'].tolist()
+            if ldr_t:
+                target = st.selectbox(L["target"], ldr_t)
                 st.session_state['cur_target'] = target
                 ls = ld_df[(ld_df['피평가자']==target)&(ld_df['구분'].str.contains("자기", na=False))]
                 si = {row['항목']: {'score': row['점수'], 'basis': row['근거']} for _, row in ls.iterrows()} if not ls.empty else None
