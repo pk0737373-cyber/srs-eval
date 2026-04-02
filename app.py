@@ -1,16 +1,20 @@
 import streamlit as st
+from streamlit_gsheets import GSheetsConnection
 import pandas as pd
 
-# --- [1] 시트 데이터 연결 ---
-SHEET_ID = "1maaFMA7RXkUWjO9kZuvuLyGGYddb0_3vEHczNZe1GSQ"
-SHEET_URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=csv&gid=0"
+# --- [1] 설정 및 구글 시트 연결 ---
+st.set_page_config(page_title="SRS 인사평가 시스템", layout="wide")
+conn = st.connection("gsheets", type=GSheetsConnection)
 
 @st.cache_data(ttl=5)
-def get_user_db():
-    try: return pd.read_csv(SHEET_URL)
-    except: return None
+def get_db():
+    try:
+        return conn.read(worksheet="Users")
+    except:
+        st.error("❌ 구글 시트 연결 에러! Secrets 주소와 공유 설정을 확인해 주세요.")
+        return None
 
-# --- [2] 정식 평가 항목 데이터 (이미지 100% 반영) ---
+# --- [2] 정식 평가 항목 데이터 ---
 EVAL_STRUCTURE = {
     "1. 업무실적": {
         "업무의 양": {
@@ -25,52 +29,25 @@ EVAL_STRUCTURE = {
         }
     },
     "2. 근무태도": {
-        "협조성": {
-            "횡적협조": "스스로 동료와 협력하며 조직체의 능률향상에 공헌하는가?",
-            "존중": "자신의 생각보다는 팀(동료) 전체의 의견을 존중하는가?",
-            "상사와의 협조": "상사에 대해 협력하며 성과가 있는가?"
-        },
-        "근무의욕": {
-            "적극성": "일에 능동적으로 대처하려는 의욕은 어떤가?",
-            "책임감": "책임을 회피하지 않으며 성실하게 일하려는 의욕은 어떤가?",
-            "연구심": "넓고 깊게 일을 연구하려는 의욕은 어떤가?"
-        },
-        "복무상황": {
-            "규율": "규칙을 준수하며 직장질서유지에 애쓰는가?",
-            "DB화": "정기적인 업무보고와 본인업무에 대한 데이터의 체계적인 관리",
-            "근태상황": "지각, 조퇴, 결근 등 상황은 어떤가?"
-        }
+        "협조성": {"횡적협조": "동료와 협력하며 공헌하는가?", "존중": "의견을 존중하는가?", "상사와의 협조": "상사에 협력하는가?"},
+        "근무의욕": {"적극성": "능동적인가?", "책임감": "성실한가?", "연구심": "연구하려는 의욕은?"},
+        "복무상황": {"규율": "질서를 준수하는가?", "DB화": "데이터 체계적 관리", "근태상황": "지각/조퇴 등 상황"}
     },
     "3. 직무능력": {
-        "지식": {
-            "직무지식": "담당업무의 지식이 넓고 깊은가?",
-            "관련지식": "관련업무에 대한 기초지식은 넓고 깊은가?"
-        },
-        "이해판단력": {
-            "신속성": "규정, 지시, 자료 등을 바르게 이해하는 속도는 어떤가?",
-            "타당성": "내린 결론은 정확하며 타당한가?",
-            "문제해결": "문제 발생 시 문제의 본질을 정확히 파악하여 효과적인 해결을 주도하는가?",
-            "통찰력": "사물의 요점을 파악하며 자주적으로 결론을 내릴 수 있는가?"
-        },
-        "창의연구력": {
-            "연구개선": "아이디어를 살리고 일의 순서개선이나 전진을 도모하고 있는가?"
-        },
-        "표현절충": {
-            "구두표현": "구두에 의한 표현이 능숙하며 알기 쉽고 정확한가?",
-            "문장표현": "문장에 의한 표현이 능숙하며 알기 쉽고 정확한가?",
-            "절충": "교섭을 원활하게 처리하는 능력은 어떤가?"
-        }
+        "지식": {"직무지식": "전문 지식이 깊은가?", "관련지식": "기초 지식이 넓은가?"},
+        "이해판단력": {"신속성": "이해 속도", "타당성": "결론의 타당성", "문제해결": "본질 파악 및 해결", "통찰력": "요점 파악"},
+        "창의연구력": {"연구개선": "개선을 도모하는가?"},
+        "표현절충": {"구두표현": "말하기 능력", "문장표현": "글쓰기 능력", "절충": "교섭 능력"}
     }
 }
 
-# --- [3] 시스템 구동 ---
-st.set_page_config(page_title="SRS 인사평가", layout="wide")
-user_db = get_user_db()
-
+# --- [3] 시스템 로직 시작 ---
+user_db = get_db()
 if 'auth' not in st.session_state:
-    st.session_state.update({'auth': False, 'user': '', 'lang': 'KO'})
+    st.session_state.update({'auth': False, 'user': '', 'pw_status': 'N', 'lang': 'KO'})
 
 if user_db is not None:
+    # [STEP 1] 로그인 화면
     if not st.session_state.auth:
         st.title("🛡️ Smart Radar System")
         name = st.text_input("성명 (Name)")
@@ -78,24 +55,39 @@ if user_db is not None:
         if st.button("로그인"):
             u_info = user_db[user_db['성명'] == name]
             if not u_info.empty and str(pw) == str(u_info.iloc[0]['비밀번호']):
-                st.session_state.auth, st.session_state.user = True, name
+                st.session_state.auth = True
+                st.session_state.user = name
+                st.session_state.pw_status = str(u_info.iloc[0]['비번변경여부'])
                 st.session_state.lang = u_info.iloc[0]['언어'] if '언어' in u_info.columns else 'KO'
                 st.rerun()
-            else: st.error("정보를 확인하세요.")
+            else: st.error("정보가 일치하지 않습니다.")
 
+    # [STEP 2] 비밀번호 재설정 (Gatekeeper)
+    elif st.session_state.pw_status == 'N':
+        st.title("🔑 보안 비밀번호 설정")
+        st.warning("첫 로그인입니다. 안전한 사용을 위해 비밀번호를 변경해 주세요.")
+        new_pw = st.text_input("새 비밀번호 (8자 이상, 특수문자 포함)", type="password")
+        if st.button("비밀번호 변경 완료"):
+            if len(new_pw) >= 8:
+                # 구글 시트에 업데이트
+                updated_df = user_db.copy()
+                updated_df.loc[updated_df['성명'] == st.session_state.user, '비밀번호'] = new_pw
+                updated_df.loc[updated_df['성명'] == st.session_state.user, '비번변경여부'] = 'Y'
+                conn.update(worksheet="Users", data=updated_df)
+                st.session_state.pw_status = 'Y'
+                st.success("✅ 비밀번호가 변경되었습니다! 이제 평가를 시작합니다.")
+                st.rerun()
+            else: st.error("비밀번호 규칙을 지켜주세요.")
+
+    # [STEP 3] 메인 평가 시스템
     else:
         user = st.session_state.user
         st.sidebar.title(f"👤 {user}님")
-        menu = st.sidebar.radio("메뉴", ["자기고과 작성", "팀원 평가", "관리자 현황판"] if user == "권정순" else ["자기고과 작성", "팀원 평가"])
+        menu = st.sidebar.radio("메뉴", ["자기고과 작성", "팀원 평가", "관리자 현황판"])
 
         if menu == "자기고과 작성":
             st.header("📋 2. 개인능력평가 (자기고과)")
-            st.info("💡 각 항목의 평가 기준을 읽고 점수와 근거를 정성껏 작성해 주세요.")
-            
-            # 탭 구성
             tabs = st.tabs(list(EVAL_STRUCTURE.keys()))
-            all_keys = [] # 검증용 키 리스트
-
             for i, (major, subs) in enumerate(EVAL_STRUCTURE.items()):
                 with tabs[i]:
                     for sub_name, items in subs.items():
@@ -104,23 +96,23 @@ if user_db is not None:
                             c1, c2, c3, c4 = st.columns([1, 3, 1.2, 4])
                             c1.write(f"**{item}**")
                             c2.caption(crit)
-                            c3.selectbox("점수", [5,4,3,2,1], key=f"s_{item}", index=1)
-                            c4.text_input("판단 근거", key=f"r_{item}", placeholder="상세 사유 기록")
-                            all_keys.append(f"r_{item}")
-                        st.divider()
-
-            # --- 이사님이 강조하신 자기 성장 REPORT ---
+                            c3.selectbox("점수", [5,4,3,2,1], key=f"s_{item}")
+                            c4.text_input("근거", key=f"r_{item}", placeholder="상세 사유")
+            
             st.header("🚀 자기 성장 REPORT")
-            st.write("2025년 하반기 본인의 노력을 자유롭게 기록해 주세요.")
-            rep1 = st.text_area("1. 2025 하반기 주요 성과", placeholder="구체적인 실적을 적어주세요.", key="rep1")
-            rep2 = st.text_area("2. 하반기 동안 습득한 지식 및 역량", placeholder="새로 배운 기술이나 지식", key="rep2")
-            rep3 = st.text_area("3. 하반기 동안 인재양성을 위한 노력(교육, 전파 등)", placeholder="팀원 성장에 기여한 내용", key="rep3")
+            st.text_area("1. 2025 하반기 주요 성과", key="rep1")
+            st.text_area("2. 습득한 지식 및 역량", key="rep2")
+            st.text_area("3. 인재양성을 위한 노력", key="rep3")
+            if st.button("✅ 최종 제출"): st.balloons(); st.success("제출 완료!")
 
-            if st.button("✅ 최종 제출하기"):
-                # 필수 항목 체크 (근거 의견 및 리포트가 비었는지 확인)
-                empty_fields = [k for k in all_keys if not st.session_state[k].strip()]
-                if not rep1.strip() or not rep2.strip() or not rep3.strip() or empty_fields:
-                    st.warning("⚠️ 작성되지 않은 항목이 있습니다. 본인의 성장을 위해 모든 항목을 채워주세요!")
-                else:
-                    st.balloons()
-                    st.success("성공적으로 제출되었습니다! 수고하셨습니다.")
+        elif menu == "팀원 평가":
+            st.header("👥 팀원 능력 평가")
+            my_team = user_db[(user_db['2차평가자'] == user) | (user_db['3차평가자'] == user)]['성명'].tolist()
+            if my_team:
+                target = st.selectbox("평가 대상 선택", my_team)
+                st.info(f"{target}님에 대한 객관적인 평가를 부탁드립니다.")
+            else: st.info("평가할 팀원이 없습니다.")
+
+        elif menu == "관리자 현황판":
+            st.header("📊 전사 관리 데이터")
+            st.dataframe(user_db)
