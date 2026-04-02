@@ -108,14 +108,18 @@ if db is not None:
         # 메뉴 리스트 생성
         m_list = []
         
-        # 대표님(김용환)은 '자기고과 작성' 메뉴 제외
+        # 대표님(김용환)은 모든 '자기평가' 관련 메뉴 제외
         if user != "김용환":
-            m_list.append(L["m1"])
-            
-        if st.session_state.ldr == 'Y': m_list.append(L["m5"])
+            m_list.append(L["m1"]) # 일반 자기고과
+            if st.session_state.ldr == 'Y': 
+                m_list.append(L["m5"]) # 리더십 자기평가
+        
+        # 타인 평가 메뉴는 대표님도 평가자라면 나타남
         t2, t3 = db[db['2차평가자']==user]['성명'].tolist(), db[db['3차평가자']==user]['성명'].tolist()
         if t2: m_list += [L["m2"], L["m6"]]
         if t3: m_list.append(L["m3"])
+        
+        # 관리자 대시보드 (이사님 권한)
         if user in ["권정순"]: m_list.append(L["m4"])
         
         menu = st.sidebar.radio("Menu", m_list)
@@ -164,6 +168,7 @@ if db is not None:
                             st.success(L["done_msg"])
                             if final_btn: st.balloons()
 
+        # 각 메뉴별 화면 출력 로직
         if menu == L["m1"]:
             st.header(L["m1"])
             render_form_logic(EVAL_DATA[lang], "self", eval_type="자기")
