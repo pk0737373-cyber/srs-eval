@@ -13,11 +13,12 @@ ADMIN_INFO = "경영관리부 권정순 이사 (010-2912-1408)"
 st.set_page_config(page_title="SRS Global HR System", layout="wide")
 conn = st.connection("gsheets", type=GSheetsConnection)
 
-# 데이터 정제 및 로드 함수
+# 실시간 데이터 로드 및 정제 함수
 def get_data_fresh(worksheet_name):
     try:
         df = conn.read(worksheet=worksheet_name, ttl=0)
         if df is not None:
+            # 전체 텍스트 앞뒤 공백 제거 및 결측치 처리
             df = df.apply(lambda x: x.str.strip() if x.dtype == "object" else x).fillna("")
             return df
         return pd.DataFrame()
@@ -157,29 +158,29 @@ LEADER_DATA = {
     "EN": {
         "1. Leadership(Core)": {
             "Leadership": {
-                "Customer Focus": "Proactively identify and respond to needs of internal/external customers in a timely manner.",
+                "Customer Focus": "Proactively identify and respond to needs of internal/external customers.",
                 "Responsibility": "Act planfully to achieve goals even without specific instructions.",
-                "Teamwork": "Share opinions and explain decision backgrounds to gain consensus from members."
+                "Teamwork": "Share opinions and explain decision backgrounds to gain consensus."
             }
         },
         "2. Performance(Execution)": {
             "Performance": {
-                "Open Comm": "Share personal aspects first to build rapport and intimacy with others.",
-                "Problem Solving": "Collect and analyze info/data to identify root causes when problems occur.",
-                "Org Insight": "Understand the organization's strategy, operational methods, and history.",
-                "Project Mgmt": "Systematically collect/analyze project info and establish detailed plans."
+                "Open Comm": "Share personal aspects first to build rapport and intimacy.",
+                "Problem Solving": "Collect and analyze info/data to identify root causes.",
+                "Org Insight": "Understand the organization's strategy and history.",
+                "Project Mgmt": "Systematically collect/analyze project info and establish plans."
             }
         },
         "3. Knowledge(Professional)": {
             "Knowledge": {
-                "Analytical": "Identify exactly what information or data is needed to solve problems.",
-                "Detailed": "Investigate related regulations or past practices to minimize potential issues."
+                "Analytical": "Identify exactly what information or data is needed.",
+                "Detailed": "Investigate related regulations or past practices to minimize issues."
             }
         }
     }
 }
 
-# [대시보드 세부항목 합산 매핑 데이터]
+# [대시보드 세부항목 합산 매핑]
 NORMAL_MAPPING = {
     "속도": "업무의 양", "지속성": "업무의 양", "능률": "업무의 양",
     "정확성": "업무의 질", "성과": "업무의 질", "꼼꼼함": "업무의 질",
@@ -192,7 +193,6 @@ NORMAL_MAPPING = {
     "구두표현": "표현절충", "문장표현": "표현절충", "절충": "표현절충"
 }
 
-# [리더십 대시보드 세부항목 합산 매핑 데이터]
 LEADER_MAPPING = {
     "고객지향": "리더십", "책임감": "리더십", "팀워크지향": "리더십",
     "개방적 의사소통": "업무실적", "문제해결": "업무실적", "조직이해": "업무실적", "프로젝트 관리": "업무실적",
@@ -200,16 +200,8 @@ LEADER_MAPPING = {
 }
 
 REPORT_QS = {
-    "KO": {
-        "q1": "1. 평가 기간동안 내가 낸 성과는 무엇입니까?",
-        "q2": "2. 평가 기간동안 내가 습득한 지식이 무엇입니까?",
-        "q3": "3. 평가 기간동안 내가 인재 양성을 위하여 무엇을 하였습니까?"
-    },
-    "EN": {
-        "q1": "1. What are your achievements during the evaluation period?",
-        "q2": "2. What knowledge did you acquire during the evaluation period?",
-        "q3": "3. What did you do for talent development during the evaluation period?"
-    }
+    "KO": {"q1": "1. 평가 기간동안 내가 낸 성과는 무엇입니까?", "q2": "2. 평가 기간동안 내가 습득한 지식이 무엇입니까?", "q3": "3. 평가 기간동안 내가 인재 양성을 위하여 무엇을 하였습니까?"},
+    "EN": {"q1": "1. What are your achievements?", "q2": "2. What knowledge acquired?", "q3": "3. Efforts for talent development?"}
 }
 
 UI = {
@@ -232,7 +224,7 @@ UI = {
         "err": "⚠️ Provide detailed reasons.", "report_title": "🚀 Growth Report",
         "score": "Score", "basis": "Basis", "basis_msg": "※ Please provide detailed basis",
         "target": "Select Target", "self_info": "Self-Input", "done_msg": "Saved!", "pw_change": "🔒 Password Change",
-        "dash_title": "🔍 Summary by Sub-categories", "dash_desc": "Full target list. Scores appear once evaluation is finalized.",
+        "dash_title": "🔍 Summary by Sub-categories", "dash_desc": "Full target list. Scores are aggregated once finalized.",
         "contact_admin": f"💡 For corrections, contact Admin ({ADMIN_INFO})."
     }
 }
@@ -254,7 +246,7 @@ def save_with_cleanup(recs, user_id, target_id, is_final, ws_name="Results"):
         conn.update(worksheet=ws_name, data=f_df)
         st.cache_data.clear()
         return True
-    except: return False
+    except Exception: return False
 
 # --- [4] 메인 로직 ---
 if 'auth' not in st.session_state: 
@@ -279,14 +271,14 @@ if not db_raw.empty:
                     })
                     if stored_pw == INITIAL_PW: st.session_state.need_pw_change = True
                     st.rerun()
-                else: st.error("Password Error")
+                else: st.error("PW Error")
             else: st.error("User Not Found")
             
     elif st.session_state.need_pw_change:
         L = UI[st.session_state.lang]
         st.title(L["pw_change"])
         with st.form("pw_change_form"):
-            new_p = st.text_input("New Password", type="password"); confirm_p = st.text_input("Confirm", type="password")
+            new_p = st.text_input("New PW", type="password"); confirm_p = st.text_input("Confirm", type="password")
             if st.form_submit_button("Change and Start"):
                 if len(new_p) < 6: st.error("6+ characters")
                 elif new_p == INITIAL_PW: st.error("Change to something else")
@@ -304,15 +296,18 @@ if not db_raw.empty:
         res_df = get_data_fresh("Results")
         ld_df = get_data_fresh("Leadership_Results")
 
+        # [메뉴 필터링] 김용환 대표님 예외 로직
         m_list = []
         if user != "김용환":
             m_list.append(L["m1"])
             if st.session_state.ldr == 'Y': m_list.append(L["m5"])
         t2_list = db_raw[db_raw['2차평가자'] == user]['성명'].tolist()
         t3_list = db_raw[db_raw['3차평가자'] == user]['성명'].tolist()
-        if t2_list: m_list.extend([L["m2"], L["m8"]])
+        if t2_list: 
+            m_list.append(L["m2"]); m_list.append(L["m8"]) 
         ldr_t2_list = db_raw[(db_raw['2차평가자'] == user) & (db_raw['리더여부'] == 'Y')]['성명'].tolist()
-        if ldr_t2_list: m_list.extend([L["m6"], L["m9"]])
+        if ldr_t2_list:
+            m_list.append(L["m6"]); m_list.append(L["m9"]) 
         if t3_list: m_list.append(L["m3"])
         ldr_t3_list = db_raw[(db_raw['3차평가자'] == user) & (db_raw['리더여부'] == 'Y')]['성명'].tolist()
         if ldr_t3_list: m_list.append(L["m7"])
@@ -330,8 +325,7 @@ if not db_raw.empty:
 
                 if is_final_done: st.success(L["already"])
                 else:
-                    if not draft_vals.empty: st.warning("⚠️ Loaded saved content.")
-                    form_id = f"f_vfinal_full_{pre}_{eval_type}_{target_name}_{ws_name}"
+                    form_id = f"f_vfinal_fix_{pre}_{eval_type}_{target_name}_{ws_name}"
                     with st.form(key=form_id):
                         tabs = st.tabs(list(data_dict.keys()))
                         res_dict = {}
@@ -348,7 +342,7 @@ if not db_raw.empty:
                                     st.divider()
                                     s = st.selectbox(L["score"], [1,2,3,4,5], index=2, key=f"s3_{target_name}_{major}_{form_id}")
                                     r = st.text_area(L["basis"], key=f"r3_{target_name}_{major}_{form_id}")
-                                    res_dict[major] = {"score": 0, "basis": r}
+                                    res_dict[major] = {"score": 0, "basis": r} # 종합 0점 고정
                                 else:
                                     sub_it = subs.items() if isinstance(subs, dict) else {major: subs}.items()
                                     for sub, items in sub_it:
@@ -398,7 +392,7 @@ if not db_raw.empty:
                                 if save_with_cleanup(recs, user, target_name, is_f, ws_name): st.success(L["done_msg"]); st.cache_data.clear(); st.rerun()
             except Exception as e: st.error(f"Error: {str(e)}")
 
-        # --- [대시보드: 전체 대상자 노출 및 강력한 합산 로직] ---
+        # --- [대시보드: 팀원평가 합산] ---
         if menu == L["m8"]:
             st.title(L["m8"]); st.info(L["dash_desc"])
             my_targets = db_raw[db_raw['2차평가자'] == user]['성명'].tolist()
@@ -408,30 +402,28 @@ if not db_raw.empty:
                 my_evs['점수'] = pd.to_numeric(my_evs['점수'], errors='coerce').fillna(0)
                 my_evs['세부항목'] = my_evs['항목'].map(NORMAL_MAPPING)
                 pivot = my_evs.pivot_table(index='피평가자', columns='세부항목', values='점수', aggfunc='sum').fillna(0)
-                dash_df = pd.DataFrame(index=my_targets); dash_df.index.name = '피평가자'
-                dash_df = dash_df.join(pivot).fillna(0)
+                dash_df = pd.DataFrame(index=my_targets); dash_df.index.name = '피평가자'; dash_df = dash_df.join(pivot).fillna(0)
                 dash_df['총점 (125점)'] = dash_df.sum(axis=1)
                 cols = ["업무의 양", "업무의 질", "협조성", "근무의욕", "복무상황", "지식", "이해판단력", "창의연구력", "표현절충", "총점 (125점)"]
                 st.dataframe(dash_df[[c for c in cols if c in dash_df.columns]], use_container_width=True)
 
+        # --- [대시보드: 리더십평가 세부항목 합산 반영] ---
         elif menu == L["m9"]:
             st.title(L["m9"]); st.info(L["dash_desc"])
-            my_ldr_targets = db_raw[(db_raw['2차평가자'] == user) & (db_raw['리더여부'] == 'Y')]['성명'].tolist()
-            if not my_ldr_targets: st.warning("No targets.")
+            my_ldr_t = db_raw[(db_raw['2차평가자'] == user) & (db_raw['리더여부'] == 'Y')]['성명'].tolist()
+            if not my_ldr_t: st.warning("No targets.")
             else:
                 my_evs_ld = ld_df[(ld_df['평가자']==user) & (ld_df['구분'].str.contains("2차", na=False))].copy()
                 my_evs_ld['점수'] = pd.to_numeric(my_evs_ld['점수'], errors='coerce').fillna(0)
-                
-                # [핵심] 리더십 세부항목 합산 로직 추가
+                # [핵심] 리더십 세부항목별 합산 매핑 적용
                 my_evs_ld['세부항목'] = my_evs_ld['항목'].map(LEADER_MAPPING)
                 pivot_ld = my_evs_ld.pivot_table(index='피평가자', columns='세부항목', values='점수', aggfunc='sum').fillna(0)
                 
-                dash_ld_df = pd.DataFrame(index=my_ldr_targets); dash_ld_df.index.name = '피평가자'
-                dash_ld_df = dash_ld_df.join(pivot_ld).fillna(0)
-                dash_ld_df['리더십 총점 (45점)'] = dash_ld_df.sum(axis=1)
+                dash_ld_df = pd.DataFrame(index=my_ldr_t); dash_ld_df.index.name = '피평가자'; dash_ld_df = dash_ld_df.join(pivot_ld).fillna(0)
+                dash_ld_df['총점 (45점)'] = dash_ld_df.sum(axis=1)
                 
-                # 리더십 세부항목 순서 (리더십, 업무실적, 지식)
-                ld_cols = ["리더십", "업무실적", "지식", "리더십 총점 (45점)"]
+                # 이사님 설계안 순서: 리더십(15), 업무실적(20), 지식(10), 총점
+                ld_cols = ["리더십", "업무실적", "지식", "총점 (45점)"]
                 st.dataframe(dash_ld_df[[c for c in ld_cols if c in dash_ld_df.columns]], use_container_width=True)
                 st.divider(); st.warning(L["contact_admin"])
 
