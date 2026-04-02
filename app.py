@@ -7,14 +7,14 @@ from datetime import datetime
 st.set_page_config(page_title="SRS 글로벌 인사평가 시스템", layout="wide")
 conn = st.connection("gsheets", type=GSheetsConnection)
 
-@st.cache_data(ttl=2)
+# 유실 방지를 위해 캐시 없이 즉시 읽어오는 설정
 def get_db(sheet_name="Users"):
     try:
-        return conn.read(worksheet=sheet_name)
+        return conn.read(worksheet=sheet_name, ttl=0)
     except:
         return None
 
-# --- [2] 정식 평가 데이터 (25개 전 항목 상세 문구) ---
+# --- [2] 정식 평가 데이터 (25개 상세 항목) ---
 EVAL_DATA = {
     "KO": {
         "1. 업무실적": {
@@ -67,36 +67,41 @@ EVAL_DATA = {
     }
 }
 
-# --- [3] UI 텍스트 사전 ---
+# --- [3] UI 텍스트 ---
 UI = {
     "KO": {
         "m1": "자기고과 작성", "m2": "👥 2차 팀원평가", "m3": "⚖️ 3차 최종평가", "m4": "📊 관리자 현황판",
-        "guide": "💡 본인의 성과와 역량을 객관적으로 증명할 수 있는 근거를 상세히 기록해 주세요.",
+        "guide": "💡 성과와 역량을 객관적으로 증명할 수 있는 근거를 상세히 기록해 주세요.",
         "score": "점수", "basis": "판단 근거", "sub": "✅ 최종 제출", "save_ok": "저장되었습니다!"
     }
 }
 
-# --- [4] 데이터 저장 및 로드 로직 ---
+# --- [4] 데이터 저장 함수 (유실 방지 업그레이드 버전) ---
 def save_result(records):
     try:
-        existing = get_db("Results")
+        existing = conn.read(worksheet="Results", ttl=0)
         new_df = pd.DataFrame(records)
-        final = pd.concat([existing, new_df], ignore_index=True) if existing is not None else new_df
-        conn.update(worksheet="Results", data=final)
+        if existing is not None and not existing.empty:
+            final_df = pd.concat([existing, new_df], ignore_index=True)
+        else:
+            final_df = new_df
+        conn.update(worksheet="Results", data=final_df)
+        st.cache_data.clear()
         return True
-    except:
+    except Exception as e:
+        st.error(f"저장 중 오류 발생: {e}")
         return False
 
-# --- [5] 시스템 구동 ---
+# --- [5] 시스템 로직 시작 ---
 user_db = get_db("Users")
 if 'auth' not in st.session_state:
-    st.session_state.update({'auth': False, 'user': '', 'pw_status': 'N', 'lang': 'KO'})
+    st.session_state.update({'auth': False, 'user': '', 'pw_status': 'N'})
 
 if user_db is not None:
-    # 로그인 화면
+    # 로그인
     if not st.session_state.auth:
         st.title("🛡️ Smart Radar System")
-        name = st.text_input("성명 (Name)")
+        name = st.text_input("성명")
         pw = st.text_input("Password", type="password")
         if st.button("Login"):
             u = user_db[user_db['성명'] == name]
@@ -105,7 +110,7 @@ if user_db is not None:
                 st.rerun()
             else: st.error("정보가 일치하지 않습니다.")
 
-    # 비번 변경 화면
+    # 비번 변경
     elif st.session_state.pw_status == 'N':
         st.title("🔑 비밀번호 변경")
         new_pw = st.text_input("새 비밀번호 (8자 이상)", type="password")
@@ -115,12 +120,10 @@ if user_db is not None:
             conn.update(worksheet="Users", data=df)
             st.session_state.pw_status = 'Y'; st.rerun()
 
-    # 메인 화면
+    # 메인
     else:
         L, E = UI["KO"], EVAL_DATA["KO"]
         user_name = st.session_state.user
-        
-        # 메뉴 구성
         m_list = [L["m1"]]
         if not user_db[user_db['2차평가자'] == user_name].empty: m_list.append(L["m2"])
         if not user_db[user_db['3차평가자'] == user_name].empty: m_list.append(L["m3"])
@@ -138,13 +141,12 @@ if user_db is not None:
                         for it, crit in items.items():
                             c1, c2, c3, c4 = st.columns([1.5, 3, 1, 3.5])
                             label = f"**{it}**"
-                            # 2차 평가자(팀장)만 본인 점수 노출
                             if self_scores and it in self_scores:
-                                label += f" <br><span style='color:blue; font-size: small;'>(본인 제출: {self_scores[it]}점)</span>"
+                                label += f" <br><span style='color:blue; font-size: 0.8em;'>(본인제출: {self_scores[it]}점)</span>"
                             c1.markdown(label, unsafe_allow_html=True)
                             c2.caption(crit)
-                            score = c3.selectbox("점수", [1,2,3,4,5], key=f"{pre}_s_{it}")
-                            basis = c4.text_input("근거", key=f"{pre}_r_{it}", placeholder="상세 근거 작성")
+                            score = c3.selectbox("점수", [1,2,3,4,5], key=f"{pre}_{it}_s")
+                            basis = c4.text_input("근거", key=f"{pre}_{it}_r", placeholder="내용 입력")
                             res_dict[it] = {"score": score, "basis": basis}
                         st.divider()
             return res_dict
@@ -152,7 +154,7 @@ if user_db is not None:
         if menu == L["m1"]:
             st.header(L["m1"])
             eval_res = render_form("self")
-            st.header("🚀 자기 성장 REPORT")
+            st.header("🚀 성장 리포트")
             r1 = st.text_area("1. 주요 성과", key="rep1")
             r2 = st.text_area("2. 습득 역량", key="rep2")
             r3 = st.text_area("3. 인재양성 노력", key="rep3")
@@ -166,25 +168,21 @@ if user_db is not None:
             st.header(L["m2"])
             team = user_db[user_db['2차평가자'] == user_name]['성명'].tolist()
             target = st.selectbox("2차 평가 대상", team)
-            
-            # 본인 점수 가져오기 (2차 전용)
             self_scores = None
-            res_df = get_db("Results")
+            res_df = conn.read(worksheet="Results", ttl=0)
             if res_df is not None:
                 target_eval = res_df[(res_df['피평가자'] == target) & (res_df['구분'] == "자기")]
                 if not target_eval.empty: self_scores = dict(zip(target_eval['항목'], target_eval['점수']))
-            
             eval_res = render_form(f"2nd_{target}", self_scores=self_scores)
-            if st.button(f"{target}님 2차 평가 제출"):
+            if st.button(f"{target}님 평가 완료"):
                 now = datetime.now().strftime("%Y-%m-%d %H:%M")
                 recs = [{"시간": now, "평가자": user_name, "피평가자": target, "구분": "2차", "항목": k, "점수": v["score"], "근거": v["basis"]} for k,v in eval_res.items()]
-                if save_result(recs): st.success(f"{target}님 평가 {L['save_ok']}")
+                if save_result(recs): st.success(f"{target}님 {L['save_ok']}")
 
         elif menu == L["m3"]:
             st.header(L["m3"])
             team = user_db[user_db['3차평가자'] == user_name]['성명'].tolist()
-            target = st.selectbox("3차 최종 평가 대상", team)
-            # 3차 평가자는 self_scores를 넘기지 않아 점수 비노출
+            target = st.selectbox("3차 평가 대상", team)
             eval_res = render_form(f"3rd_{target}")
             if st.button(f"{target}님 최종 확정"):
                 now = datetime.now().strftime("%Y-%m-%d %H:%M")
@@ -193,10 +191,10 @@ if user_db is not None:
 
         elif menu == L["m4"]:
             st.header(L["m4"])
-            st.dataframe(user_db, use_container_width=True)
+            st.dataframe(user_db)
             st.divider()
             r_target = st.selectbox("초기화 대상", user_db['성명'].tolist())
-            if st.button("비밀번호 초기화 (12345678!)"):
+            if st.button("비번 초기화"):
                 df = user_db.copy()
                 df.loc[df['성명']==r_target, ['비밀번호','비번변경여부']] = ['12345678!','N']
-                conn.update(worksheet="Users", data=df); st.success("완료!")
+                conn.update(worksheet="Users", data=df); st.success("완료")
