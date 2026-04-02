@@ -5,11 +5,13 @@ import datetime
 from datetime import timedelta
 import time
 
+# --- [0] 보안 설정 ---
+INITIAL_PW = "12345678!"
+
 # --- [1] 기본 설정 ---
 st.set_page_config(page_title="SRS Global HR System", layout="wide")
 conn = st.connection("gsheets", type=GSheetsConnection)
 
-# 구글 API 차단 방지를 위한 캐싱 (60초)
 @st.cache_data(ttl=60)
 def get_data_cached(worksheet_name):
     try:
@@ -20,7 +22,7 @@ def get_data_cached(worksheet_name):
     except Exception:
         return pd.DataFrame()
 
-# --- [2] 평가 데이터 (설계안 상세 문구 100% 원문 반영) ---
+# --- [2] 평가 데이터 (상세 문구 100% 원문 반영) ---
 EVAL_DATA = {
     "KO": {
         "1. 업무실적": {
@@ -76,51 +78,51 @@ EVAL_DATA = {
     "EN": {
         "1. Performance": {
             "Quantity of Work": {
-                "Speed": "Did you process work quickly without any delay?",
-                "Persistence": "Did you work consistently and persistently without gaps?",
-                "Efficiency": "Did you handle work accurately and efficiently without waste?"
+                "Speed": "Did you process work quickly without delay?",
+                "Persistence": "Did you work consistently and persistently?",
+                "Efficiency": "Did you handle work accurately and efficiently?"
             },
             "Quality of Work": {
                 "Accuracy": "Are the results of your work reliable?",
-                "Achievement": "Was the achievement of your work outstanding in its content?",
+                "Achievement": "Was the achievement of your work outstanding?",
                 "Thoroughness": "Were you thorough in follow-up and completion?"
             }
         },
         "2. Work Attitude": {
             "Cooperation": {
-                "Horizontal": "Did you cooperate with colleagues for team efficiency?",
-                "Respect": "Did you respect team opinions over your personal views?",
-                "Supervisor": "Did you cooperate effectively with your supervisor for results?"
+                "Horizontal": "Did you cooperate with colleagues for efficiency?",
+                "Respect": "Did you respect team opinions over personal views?",
+                "Supervisor": "Did you cooperate effectively with your supervisor?"
             },
             "Motivation": {
-                "Proactivity": "What was your level of proactive engagement in your work?",
+                "Proactivity": "What was your level of proactive engagement?",
                 "Responsibility": "Did you work sincerely without avoiding responsibility?",
-                "Research": "What was your level of desire for deep research and study?"
+                "Research": "What was your level of desire for deep research?"
             },
             "Compliance": {
-                "Discipline": "Did you follow rules and strive to maintain workplace order?",
-                "Data Mgmt": "Systematic management of periodic reports and personal work data",
-                "Attendance": "How was your attendance status (tardiness, early leave, absence)?"
+                "Discipline": "Did you follow rules and maintain order?",
+                "Data Mgmt": "Systematic management of periodic reports and data",
+                "Attendance": "How was your attendance status?"
             }
         },
         "3. Job Competency": {
             "Knowledge": {
-                "Job Knowledge": "Is your knowledge of your assigned duties broad and deep?",
+                "Job Knowledge": "Is your knowledge of duties broad and deep?",
                 "Related Knowledge": "Is your basic knowledge of related work sufficient?"
             },
             "Judgment": {
-                "Speed": "How fast do you correctly understand regulations, instructions, and data?",
-                "Validity": "Are your judgments and conclusions accurate and valid?",
-                "Problem Solving": "Do you identify root causes and lead effective solutions?",
-                "Insight": "Do you grasp key points and reach conclusions independently?"
+                "Speed": "How fast do you understand regulations/instructions?",
+                "Validity": "Are your judgments and conclusions accurate?",
+                "Problem Solving": "Do you lead effective solutions for problems?",
+                "Insight": "Do you grasp key points and reach conclusions?"
             },
             "Creativity": {
-                "Improvement": "Do you always seek improvements through creative ideas?"
+                "Improvement": "Do you seek improvements through creative ideas?"
             },
             "Communication": {
-                "Verbal": "Are your verbal reporting and explanation skills clear and accurate?",
-                "Written": "Are your written reports and drafts clear and accurate?",
-                "Negotiation": "How is your ability to handle coordination and negotiation smoothly?"
+                "Verbal": "Are your verbal reporting skills clear and accurate?",
+                "Written": "Are your written reports clear and accurate?",
+                "Negotiation": "Ability to handle coordination and negotiation?"
             }
         }
     }
@@ -128,83 +130,25 @@ EVAL_DATA = {
 
 LEADER_DATA = {
     "KO": {
-        "1. 리더십(기본역량)": {
-            "리더십": {
-                "고객지향": "내부 혹은 외부 고객의 요구를 능동적으로 찾아내고 적시에 대응한다",
-                "책임감": "특별한 지시를 하지 않더라도 업무목표를 달성하기 위해 계획적으로 행동한다.",
-                "팀워크지향": "구성원의 공감을 얻기 위해 자주 의견을 공유하고 의사결정의 배경이나 당위성에 대해 설명한다."
-            }
-        },
-        "2. 업무실적(실행역량)": {
-            "업무실적": {
-                "개방적 의사소통": "상대방이 친밀감을 느낄 수 있도록 자신의 사적인 부분을 먼저 이야기한다.",
-                "문제해결": "문제 발생 시 문제상황과 관련된 정보와 자료를 수집하고 분석하여 문제의 근본원인을 규명한다.",
-                "조직이해": "조직의 전략, 운영방식, 역사 등을 파악한다.",
-                "프로젝트 관리": "프로젝트와 관련된 정보를 체계적으로 수집, 분석하여 계획을 수립한다."
-            }
-        },
-        "3. 지식(전문역량)": {
-            "지식": {
-                "분석적사고": "문제를 해결하기 위해 필요한 정보나 자료가 무엇인지 정확히 파악한다.",
-                "세밀한업무처리": "문제 발생 소지를 최소화하기 위해 조직의 관련 규정이나 과거 관행 등을 조사한다."
-            }
-        }
+        "1. 리더십(기본역량)": {"리더십": {"고객지향": "내부 혹은 외부 고객의 요구를 능동적으로 찾아내고 적시에 대응한다", "책임감": "특별한 지시를 하지 않더라도 업무목표를 달성하기 위해 계획적으로 행동한다.", "팀워크지향": "구성원의 공감을 얻기 위해 자주 의견을 공유하고 배경을 설명한다"}},
+        "2. 업무실적(실행역량)": {"업무실적": {"개방적의사소통": "상대방이 친밀감을 느낄 수 있도록 사적인 부분을 먼저 이야기한다.", "문제해결": "문제 발생 시 정보와 자료를 분석하여 근본원인을 규명한다.", "조직이해": "조직의 전략, 운영방식, 역사 등을 파악한다.", "프로젝트 관리": "프로젝트와 관련된 정보를 체계적으로 수집하여 계획을 수립한다."}},
+        "3. 지식(전문역량)": {"지식": {"분석적사고": "문제를 해결하기 위해 필요한 정보나 자료가 무엇인지 파악한다.", "세밀한업무처리": "문제 발생 소지를 최소화하기 위해 관련 규정이나 관행 등을 조사한다."}}
     },
     "EN": {
-        "1. Leadership(Core)": {
-            "Leadership": {
-                "Customer Focus": "Proactively identify and respond to needs of internal/external customers.",
-                "Responsibility": "Act planfully to achieve goals even without specific instructions.",
-                "Teamwork": "Share opinions and explain decision backgrounds to gain consensus."
-            }
-        },
-        "2. Performance(Execution)": {
-            "Performance": {
-                "Open Comm": "Share personal aspects first to build rapport and intimacy with others.",
-                "Problem Solving": "Collect and analyze info/data to identify root causes when problems occur.",
-                "Org Insight": "Understand the organization's strategy, operational methods, and history.",
-                "Project Mgmt": "Systematically collect/analyze project info and establish detailed plans."
-            }
-        },
-        "3. Knowledge(Professional)": {
-            "Knowledge": {
-                "Analytical": "Identify exactly what information or data is needed to solve problems.",
-                "Detailed": "Investigate related regulations or past practices to minimize potential issues."
-            }
-        }
+        "1. Leadership(Core)": {"Leadership": {"Customer Focus": "Identify and respond to customer needs.", "Responsibility": "Act planfully to achieve goals.", "Teamwork": "Share opinions and explain decision backgrounds."}},
+        "2. Performance(Execution)": {"Performance": {"Open Comm": "Build rapport through personal sharing.", "Problem Solving": "Identify root causes with data analysis.", "Org Insight": "Understand strategy, methods, and history.", "Project Mgmt": "Collect info and establish detailed plans."}},
+        "3. Knowledge(Professional)": {"Knowledge": {"Analytical": "Identify exactly what information is needed.", "Detailed": "Investigate regulations or past practices."}}
     }
 }
 
 REPORT_UI = {
-    "KO": {
-        "q1": "1. 평가 기간동안 내가 낸 성과는 무엇입니까?",
-        "q2": "2. 평가 기간동안 내가 습득한 지식이 무엇입니까?",
-        "q3": "3. 평가 기간동안 내가 인재 양성을 위하여 무엇을 하였습니까?"
-    },
-    "EN": {
-        "q1": "1. What are your achievements during the evaluation period?",
-        "q2": "2. What knowledge did you acquire during the evaluation period?",
-        "q3": "3. What did you do for talent development during the evaluation period?"
-    }
+    "KO": {"q1": "1. 평가 기간동안 내가 낸 성과는 무엇입니까?", "q2": "2. 평가 기간동안 내가 습득한 지식이 무엇입니까?", "q3": "3. 평가 기간동안 내가 인재 양성을 위하여 무엇을 하였습니까?"},
+    "EN": {"q1": "1. What are your achievements?", "q2": "2. What knowledge acquired?", "q3": "3. Efforts for talent development?"}
 }
 
 UI = {
-    "KO": {
-        "m1": "📝 자기고과 작성", "m2": "👥 2차 팀원평가", "m3": "⚖️ 3차 최종평가", "m4": "📊 관리자 대시보드",
-        "m5": "🚀 리더십 자기평가", "m6": "🎖️ 2차 리더십평가", "m7": "🎖️ 3차 리더십평가",
-        "sub": "✅ 최종 제출", "save": "💾 임시 저장", "already": "✅ 제출 완료되었습니다.",
-        "err": "⚠️ 모든 항목의 근거를 상세히 작성해 주세요.", "report_title": "🚀 자기 성장 REPORT",
-        "score": "점수", "basis": "근거 (상세히 작성)", "basis_msg": "※ 점수 산출 근거를 상세히 작성해 주세요",
-        "target": "대상 선택", "self_info": "본인 입력", "done_msg": "저장되었습니다!", "pw_change": "🔒 비밀번호 변경 안내"
-    },
-    "EN": {
-        "m1": "📝 Self-Eval", "m2": "👥 2nd Eval", "m3": "⚖️ 3rd Final", "m4": "📊 Admin",
-        "m5": "🚀 Lead Self-Eval", "m6": "🎖️ 2nd Lead Eval", "m7": "🎖️ 3rd Lead Eval",
-        "sub": "✅ Final Submit", "save": "💾 Save Draft", "already": "✅ Completed.",
-        "err": "⚠️ Provide detailed reasons.", "report_title": "🚀 Growth REPORT",
-        "score": "Score", "basis": "Basis", "basis_msg": "※ Please provide detailed reasons",
-        "target": "Select Target", "self_info": "Self-Input", "done_msg": "Saved!", "pw_change": "🔒 Change Password"
-    }
+    "KO": {"m1": "📝 자기고과 작성", "m2": "👥 2차 팀원평가", "m3": "⚖️ 3차 최종평가", "m4": "📊 관리자 대시보드", "m5": "🚀 리더십 자기평가", "m6": "🎖️ 2차 리더십평가", "m7": "🎖️ 3차 리더십평가", "sub": "✅ 최종 제출", "save": "💾 임시 저장", "already": "✅ 제출 완료되었습니다.", "err": "⚠️ 근거를 상세히 작성해 주세요.", "report_title": "🚀 자기 성장 REPORT", "score": "점수", "basis": "근거 (상세히 작성)", "basis_msg": "※ 점수 산출 근거를 상세히 작성해 주세요", "target": "대상 선택", "self_info": "본인 입력", "done_msg": "저장되었습니다!", "pw_change": "🔒 비밀번호 변경 안내"},
+    "EN": {"m1": "📝 Self-Eval", "m2": "👥 2nd Eval", "m3": "⚖️ 3rd Final", "m4": "📊 Admin", "m5": "🚀 Lead Self-Eval", "m6": "🎖️ 2nd Lead Eval", "m7": "🎖️ 3rd Lead Eval", "sub": "✅ Submit", "save": "💾 Save Draft", "already": "✅ Completed.", "err": "⚠️ Provide details.", "report_title": "🚀 Growth Report", "score": "Score", "basis": "Basis", "basis_msg": "※ Please provide detailed basis", "target": "Select Target", "self_info": "Self-Input", "done_msg": "Saved!", "pw_change": "🔒 Change Password"}
 }
 
 # --- [3] 데이터 처리 함수 ---
@@ -219,7 +163,7 @@ def save_with_cleanup(recs, user_id, target_id, is_final, ws_name="Results"):
         conn.update(worksheet=ws_name, data=f_df)
         st.cache_data.clear()
         return True
-    except Exception: return False
+    except: return False
 
 # --- [4] 메인 로직 ---
 db_raw = get_data_cached("Users")
@@ -232,41 +176,49 @@ if not db_raw.empty:
         n, p = st.text_input("Name"), st.text_input("PW", type="password")
         if st.button("Login"):
             u = db_raw[db_raw['성명'] == n.strip()]
-            if not u.empty and str(p) == str(u.iloc[0]['비밀번호']):
-                u_lang = str(u.iloc[0].get('언어', 'KO')).upper()
-                st.session_state.update({
-                    'auth':True, 'user':n.strip(), 
-                    'ldr':str(u.iloc[0]['리더여부']).upper(), 
-                    'lang': u_lang if u_lang in ["KO", "EN"] else "KO"
-                })
-                # [최초 로그인 비밀번호 변경 체크] 초기 비번이 '1234'인 경우 강제 변경
-                if str(p) == "1234":
-                    st.session_state.need_pw_change = True
-                st.rerun()
-            else: st.error("Login Failed")
+            if not u.empty:
+                stored_pw = str(u.iloc[0]['비밀번호']).strip()
+                if str(p).strip() == stored_pw:
+                    u_lang = str(u.iloc[0].get('언어', 'KO')).upper()
+                    st.session_state.update({
+                        'auth':True, 'user':n.strip(), 
+                        'ldr':str(u.iloc[0]['리더여부']).upper(), 
+                        'lang': u_lang if u_lang in ["KO", "EN"] else "KO"
+                    })
+                    # [보안 로직] 저장된 비번이 초기값과 같으면 변경 플래그 활성
+                    if stored_pw == INITIAL_PW:
+                        st.session_state.need_pw_change = True
+                    st.rerun()
+                else: st.error("Password Incorrect")
+            else: st.error("User Not Found")
             
     # [비밀번호 강제 변경 화면]
     elif st.session_state.need_pw_change:
         L = UI[st.session_state.lang]
         st.title(L["pw_change"])
-        st.warning("최초 로그인 시 비밀번호를 반드시 변경해야 합니다." if st.session_state.lang == "KO" else "You must change your password on first login.")
-        new_p = st.text_input("New Password", type="password")
-        confirm_p = st.text_input("Confirm New Password", type="password")
+        st.warning(f"⚠️ 현재 초기 비밀번호({INITIAL_PW})를 사용 중입니다. 보안을 위해 새로운 비밀번호로 변경해야 시스템을 이용할 수 있습니다.")
         
-        if st.button("Change and Continue"):
-            if len(new_p) < 4:
-                st.error("비밀번호는 4자리 이상이어야 합니다." if st.session_state.lang=="KO" else "PW must be at least 4 chars.")
-            elif new_p != confirm_p:
-                st.error("비밀번호가 일치하지 않습니다." if st.session_state.lang=="KO" else "PW does not match.")
-            else:
-                # 시트 업데이트
-                db_raw.loc[db_raw['성명'] == st.session_state.user, '비밀번호'] = new_p
-                conn.update(worksheet="Users", data=db_raw)
-                st.session_state.need_pw_change = False
-                st.success("변경 완료!" if st.session_state.lang=="KO" else "Changed!")
-                st.cache_data.clear()
-                time.sleep(1)
-                st.rerun()
+        with st.form("pw_change_form"):
+            new_p = st.text_input("New Password", type="password")
+            confirm_p = st.text_input("Confirm New Password", type="password")
+            if st.form_submit_button("Change Password and Start"):
+                if len(new_p) < 6:
+                    st.error("보안을 위해 6자리 이상으로 설정해 주세요.")
+                elif new_p == INITIAL_PW:
+                    st.error(f"초기 비밀번호와 다른 값을 입력해 주세요.")
+                elif new_p != confirm_p:
+                    st.error("비밀번호가 서로 일치하지 않습니다.")
+                else:
+                    # 엑셀 업데이트 (캐시 무시)
+                    db_full = conn.read(worksheet="Users", ttl=0)
+                    db_full.loc[db_full['성명'] == st.session_state.user, '비밀번호'] = str(new_p)
+                    conn.update(worksheet="Users", data=db_full)
+                    
+                    st.session_state.need_pw_change = False
+                    st.cache_data.clear()
+                    st.success("비밀번호 변경 완료! 시스템을 시작합니다.")
+                    time.sleep(1.5)
+                    st.rerun()
 
     # [인사평가 본 앱]
     else:
@@ -280,8 +232,7 @@ if not db_raw.empty:
         if user != "김용환":
             m_list.append(L["m1"])
             if st.session_state.ldr == 'Y': m_list.append(L["m5"])
-        t2 = db_raw[db_raw['2차평가자'] == user]['성명'].tolist()
-        t3 = db_raw[db_raw['3차평가자'] == user]['성명'].tolist()
+        t2, t3 = db_raw[db_raw['2차평가자'] == user]['성명'].tolist(), db_raw[db_raw['3차평가자'] == user]['성명'].tolist()
         if t2: m_list.append(L["m2"])
         my_ldr_targets = db_raw[(db_raw['2차평가자'] == user) & (db_raw['리더여부'] == 'Y')]['성명'].tolist()
         if my_ldr_targets: m_list.append(L["m6"])
@@ -303,7 +254,6 @@ if not db_raw.empty:
                 if is_final_done:
                     st.success(L["already"])
                 else:
-                    if not draft_vals.empty: st.warning("⚠️ Loaded draft content.")
                     form_id = f"f_{pre}_{eval_type}_{target_name}_{ws_name}"
                     with st.form(key=form_id):
                         tabs = st.tabs(list(data_dict.keys()))
@@ -337,7 +287,6 @@ if not db_raw.empty:
                                             if self_info and it in self_info:
                                                 lbl += f"<br><span style='color:blue; font-size:0.85em;'>[{L['self_info']}] {self_info[it]['score']}</span>"
                                                 if self_info[it]['basis']: lbl += f"<br><small>ㄴ{self_info[it]['basis']}</small>"
-                                            
                                             c1.markdown(lbl, unsafe_allow_html=True); c2.info(crit)
                                             s = c3.selectbox(L["score"], [1,2,3,4,5], index=max(0, min(4, init_score-1)), key=f"s_{target_name}_{it}_{form_id}")
                                             r = c4.text_input(L["basis"], value=init_basis, placeholder=L["basis_msg"], key=f"r_{target_name}_{it}_{form_id}")
@@ -351,75 +300,77 @@ if not db_raw.empty:
                                 rep_data[k] = st.text_area(v, value=str(saved_rep.iloc[0]['근거']) if not saved_rep.empty else "", key=f"rep_{k}_{target_name}_{form_id}")
 
                         bc1, bc2 = st.columns(2)
-                        btn_save = bc1.form_submit_button(L["save"])
-                        btn_sub = bc2.form_submit_button(L["sub"])
-
-                        if btn_save or btn_sub:
-                            is_f = btn_sub
-                            if is_f and any(len(str(v["basis"]).strip()) < 2 for v in res_dict.values()):
-                                st.error(L["err"])
+                        if bc1.form_submit_button(L["save"]):
+                            now = (datetime.datetime.now()+timedelta(hours=9)).strftime("%Y-%m-%d %H:%M")
+                            recs = [{"시간":now,"평가자":user,"피평가자":target_name,"구분":f"{eval_type}(Draft)","항목":k if not is_3rd else f"[{k}] 종합","점수":v["score"],"근거":v["basis"]} for k,v in res_dict.items()]
+                            if pre == "self":
+                                for kq, vq in rep_data.items(): recs.append({"시간":now,"평가자":user,"피평가자":user,"구분":"리포트","항목":REPORT_UI[lang][kq],"점수":"-","근거":vq})
+                            if save_with_cleanup(recs, user, target_name, False, ws_name): st.success(L["done_msg"]); st.cache_data.clear(); st.rerun()
+                        
+                        if bc2.form_submit_button(L["sub"]):
+                            if any(len(str(v["basis"]).strip()) < 2 for v in res_dict.values()): st.error(L["err"])
                             else:
                                 now = (datetime.datetime.now()+timedelta(hours=9)).strftime("%Y-%m-%d %H:%M")
-                                stt = "Final" if is_f else "Draft"
-                                recs = [{"시간":now,"평가자":user,"피평가자":target_name,"구분":f"{eval_type}({stt})","항목":k if not is_3rd else f"[{k}] 종합","점수":v["score"],"근거":v["basis"]} for k,v in res_dict.items()]
+                                recs = [{"시간":now,"평가자":user,"피평가자":target_name,"구분":f"{eval_type}(Final)","항목":k if not is_3rd else f"[{k}] 종합","점수":v["score"],"근거":v["basis"]} for k,v in res_dict.items()]
                                 if pre == "self":
                                     for kq, vq in rep_data.items(): recs.append({"시간":now,"평가자":user,"피평가자":user,"구분":"리포트","항목":REPORT_UI[lang][kq],"점수":"-","근거":vq})
-                                if save_with_cleanup(recs, user, target_name, is_f, ws_name):
-                                    st.success(L["done_msg"]); st.cache_data.clear(); st.rerun()
-            except Exception as e:
-                st.error(f"⚠️ Error: {str(e)}")
+                                if save_with_cleanup(recs, user, target_name, True, ws_name): st.success(L["done_msg"]); st.cache_data.clear(); st.rerun()
+            except Exception: st.error("⚠️ 데이터 처리 오류")
 
         # --- [메뉴 핸들링] ---
         if menu == L["m1"]: render_form(EVAL_DATA[lang], "self", target_name=user)
         elif menu == L["m5"]: render_form(LEADER_DATA[lang], "ld", ws_name="Leadership_Results", target_name=user)
         elif menu == L["m2"]:
-            target = st.selectbox(L["target"], t2, key="sel_m2_final")
-            if target:
-                ts = res_df[(res_df['피평가자']==target)&(res_df['구분'].str.contains("자기", na=False))] if not res_df.empty else pd.DataFrame()
+            target = st.selectbox(L["target"], t2, key="sel_m2_f")
+            if target and not res_df.empty:
+                ts = res_df[(res_df['피평가자']==target)&(res_df['구분'].str.contains("자기", na=False))]
                 if ts.empty: st.warning(f"⚠️ {target} has not submitted yet.")
                 else:
                     si = {row['항목']: {'score': row['점수'], 'basis': row['근거']} for _, row in ts.iterrows()}
-                    rd = res_df[(res_df['피평가자']==target)&(res_df['구분']=="리포트")] if not res_df.empty else pd.DataFrame()
+                    rd = res_df[(res_df['피평가자']==target)&(res_df['구분']=="리포트")]
                     if not rd.empty:
-                        with st.expander("📌 View Growth Report"):
+                        with st.expander("📌 View Report"):
                             for _, r in rd.iterrows(): st.markdown(f"**{r['항목']}**"); st.info(r['근거'])
                     render_form(EVAL_DATA[lang], "ev2", si, eval_type="2차", target_name=target)
         elif menu == L["m6"]:
-            target = st.selectbox(L["target"], my_ldr_targets, key="sel_m6_final")
-            if target:
-                ls = ld_df[(ld_df['피평가자']==target)&(ld_df['구분'].str.contains("자기", na=False))] if not ld_df.empty else pd.DataFrame()
-                if ls.empty: st.warning(f"⚠️ {target} has not submitted leadership self-eval.")
+            target = st.selectbox(L["target"], my_ldr_targets, key="sel_m6_f")
+            if target and not ld_df.empty:
+                ls = ld_df[(ld_df['피평가자']==target)&(ld_df['구분'].str.contains("자기", na=False))]
+                if ls.empty: st.warning(f"⚠️ {target} has not submitted yet.")
                 else:
                     si = {row['항목']: {'score': row['점수'], 'basis': row['근거']} for _, row in ls.iterrows()}
                     render_form(LEADER_DATA[lang], "ld2", si, eval_type="2차", ws_name="Leadership_Results", target_name=target)
         elif menu == L["m3"]:
-            target = st.selectbox(L["target"], t3, key="sel_m3_final")
-            if target:
-                ts = res_df[(res_df['피평가자']==target)&(res_df['구분'].str.contains("자기", na=False))] if not res_df.empty else pd.DataFrame()
+            target = st.selectbox(L["target"], t3, key="sel_m3_f")
+            if target and not res_df.empty:
+                ts = res_df[(res_df['피평가자']==target)&(res_df['구분'].str.contains("자기", na=False))]
                 if ts.empty: st.warning("⚠️ Waiting for self-evaluation...")
                 else:
                     si = {row['항목']: {'score': row['점수'], 'basis': row['근거']} for _, row in ts.iterrows()}
                     render_form(EVAL_DATA[lang], "ev3", si, eval_type="3차", is_3rd=True, target_name=target)
         elif menu == L["m7"]:
-            target = st.selectbox(L["target"], my_ldr_3rd_targets, key="sel_m7_final")
-            if target:
-                ls3 = ld_df[(ld_df['피평가자']==target)&(ld_df['구분'].str.contains("자기", na=False))] if not ld_df.empty else pd.DataFrame()
-                if ls3.empty: st.warning("⚠️ Waiting for leadership self-evaluation...")
+            target = st.selectbox(L["target"], my_ldr_3rd_targets, key="sel_m7_f")
+            if target and not ld_df.empty:
+                ls3 = ld_df[(ld_df['피평가자']==target)&(ld_df['구분'].str.contains("자기", na=False))]
+                if ls3.empty: st.warning("⚠️ Waiting for leadership self-eval...")
                 else:
                     si3 = {row['항목']: {'score': row['점수'], 'basis': row['근거']} for _, row in ls3.iterrows()}
                     render_form(LEADER_DATA[lang], "ld3", si3, eval_type="3차", ws_name="Leadership_Results", is_3rd=True, target_name=target)
         elif menu == L["m4"]:
             st.title(L["m4"])
-            status_df = []
-            for _, r in db_raw.iterrows():
-                nm = r['성명']
-                s_stat = "✅" if not res_df.empty and nm in res_df[res_df['구분'].str.contains("자기", na=False)]['피평가자'].values else "⏳"
-                l_stat = "✅" if not ld_df.empty and nm in ld_df[ld_df['구분'].str.contains("자기", na=False)]['피평가자'].values else ("-" if r['리더여부']=='N' else "⏳")
-                status_df.append({"Name": nm, "Self-Eval": s_stat, "Leadership": l_stat})
-            st.table(pd.DataFrame(status_df))
+            if not res_df.empty:
+                status_df = []
+                for _, r in db_raw.iterrows():
+                    nm = r['성명']
+                    s_stat = "✅" if nm in res_df[res_df['구분'].str.contains("자기", na=False)]['피평가자'].values else "⏳"
+                    l_stat = "✅" if nm in ld_df[ld_df['구분'].str.contains("자기", na=False)]['피평가자'].values else ("-" if r['리더여부']=='N' else "⏳")
+                    status_df.append({"Name": nm, "Self-Eval": s_stat, "Leadership": l_stat})
+                st.table(pd.DataFrame(status_df))
             st.divider()
             sel_u = st.selectbox("Employee", db_raw['성명'].tolist(), key="admin_sel")
             new_pw = st.text_input("New PW", type="password", key="admin_pw")
-            if st.button("Change Password"):
-                db_raw.loc[db_raw['성명'] == sel_u, '비밀번호'] = new_pw
-                conn.update(worksheet="Users", data=db_raw); st.success("Updated!"); st.cache_data.clear()
+            if st.button("Update PW"):
+                db_full = conn.read(worksheet="Users", ttl=0)
+                db_full.loc[db_full['성명'] == sel_u, '비밀번호'] = str(new_pw)
+                conn.update(worksheet="Users", data=db_full)
+                st.success("Updated!"); st.cache_data.clear()
