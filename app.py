@@ -4,7 +4,7 @@ import pandas as pd
 import datetime
 from datetime import timedelta
 
-# --- [1] 설정 및 시트 연결 ---
+# --- [1] 기본 설정 및 시트 연결 ---
 st.set_page_config(page_title="SRS Global HR System", layout="wide")
 conn = st.connection("gsheets", type=GSheetsConnection)
 
@@ -20,8 +20,8 @@ EVAL_DATA = {
             "업무의 질": {"정확성": "일의 결과를 믿을 수 있는가?", "성과": "일의 성과가 내용에 있어서 뛰어났는가?", "꼼꼼함": "철저하고 뒷처리를 잘하는가?"}
         },
         "2. 근무태도": {
-            "협조성": {"횡적협조": "동료와 협력하며 조직 효율에 공헌하는가?", "존중": "팀 전체의 의견을 존중하는가?", "상사협조": "상사에 대해 협력하며 성과가 있는가?"},
-            "근무의욕": {"적극성": "일에 능동적으로 대처하려는 의욕은 어떤가?", "책임감": "성실하게 일하려는 의욕은 어떤가?", "연구심": "깊게 연구하려는 의욕은 어떤가?"},
+            "협조성": {"횡적협조": "동료와 협력하며 조직체의 능률향상에 공헌하는가?", "존중": "팀 전체의 의견을 존중하는가?", "상사협조": "상사에 대해 협력하며 성과가 있는가?"},
+            "근무의욕": {"적극성": "일에 능동적으로 대처하려는 의욕은 어떤가?", "책임감": "책임을 회피하지 않으며 성실하게 일하려는 의욕은 어떤가?", "연구심": "깊게 연구하려는 의욕은 어떤가?"},
             "복무상황": {"규율": "규칙 준수 및 질서 유지?", "DB화": "업무 데이터의 체계적인 관리", "근태상황": "지각, 조퇴, 결근 상황 등"}
         },
         "3. 직무능력": {
@@ -155,9 +155,11 @@ if user_db is not None:
                                 if self_info[it]['basis']: label += f"<br><span style='color:gray; font-size: 0.75em;'>ㄴ{self_info[it]['basis']}</span>"
                             c1.markdown(label, unsafe_allow_html=True)
                             c2.caption(crit)
-                            # 중복 방지를 위해 키 값에 대분류(major)와 소분류(sub)를 포함
-                            s = c3.selectbox(L["score"], [1,2,3,4,5], key=f"{pre}_{major}_{sub}_{it}_s")
-                            r = c4.text_input(L["basis"], key=f"{pre}_{major}_{sub}_{it}_r")
+                            # 중복 방지를 위해 키 값에 프리픽스, 대분류, 소분류, 항목명을 모두 조합
+                            s_key = f"{pre}_{major}_{sub}_{it}_score".replace(" ","_")
+                            r_key = f"{pre}_{major}_{sub}_{it}_basis".replace(" ","_")
+                            s = c3.selectbox(L["score"], [1,2,3,4,5], key=s_key)
+                            r = c4.text_input(L["basis"], key=r_key)
                             res_dict[it] = {"score": s, "basis": r, "category": sub}
             return res_dict
 
@@ -192,7 +194,7 @@ if user_db is not None:
                         recs = [{"시간": now, "평가자": user_name, "피평가자": user_name, "구분": "자기", "항목": k, "점수": v["score"], "근거": v["basis"]} for k,v in eval_res.items()]
                         if save_data(recs, "Leadership_Results"): st.success("Done!"); st.rerun()
 
-        # 2차/3차 평가
+        # 2차/3차 평가 (모두 본인 점수/근거 노출)
         elif menu in [L["m2"], L["m3"]]:
             st.header(menu)
             mode = "2차" if menu == L["m2"] else "3차"
@@ -229,7 +231,7 @@ if user_db is not None:
                         recs = [{"시간": now, "평가자": user_name, "피평가자": target, "구분": "2차", "항목": k, "점수": v["score"], "근거": v["basis"]} for k,v in eval_res.items()]
                         if save_data(recs, "Leadership_Results"): st.success("Done!"); st.balloons()
 
-        # 대시보드
+        # 관리자 대시보드
         elif menu == L["m4"]:
             st.title("Admin")
             st.dataframe(user_db)
