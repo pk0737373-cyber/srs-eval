@@ -237,7 +237,7 @@ if user_db is not None:
             if ld_df is not None and not ld_df.empty and not ld_df[(ld_df['피평가자'] == user_name) & (ld_df['구분'] == "자기")].empty:
                 st.success(L["already"])
             else:
-                eval_res = render_form(LD, "ldr_self")
+                eval_res = render_form(LEADER_EVAL_DATA["KO"], "ldr_self")
                 if st.button(L["sub"]):
                     if any(not v["basis"].strip() for v in eval_res.values()): st.error(L["err_empty"])
                     else:
