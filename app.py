@@ -13,7 +13,7 @@ ADMIN_INFO = "경영관리부 권정순 이사 (010-2912-1408)"
 st.set_page_config(page_title="SRS Global HR System", layout="wide")
 conn = st.connection("gsheets", type=GSheetsConnection)
 
-# 실시간 데이터 로드 및 정제
+# 데이터 로드 및 정제
 def get_data_fresh(worksheet_name):
     try:
         df = conn.read(worksheet=worksheet_name, ttl=0)
@@ -24,8 +24,7 @@ def get_data_fresh(worksheet_name):
     except Exception:
         return pd.DataFrame()
 
-# --- [2] 평가 데이터 (구조 통일 및 무삭제 반영) ---
-# 구조: 대분류(Tab) > 중분류(Section) > 관찰항목(Question)
+# --- [2] 평가 데이터 (무삭제 상세 지표 100% 반영) ---
 EVAL_DATA = {
     "KO": {
         "1. 업무실적": {
@@ -42,7 +41,7 @@ EVAL_DATA = {
         },
         "2. 근무태도": {
             "협조성": {
-                "횡적협조": "스스로 동료와 협력하며 조직체의 능률향상에 공헌하는가?",
+                "횡적협조": "스스로 동료와협력하며 조직체의 능률향상에 공헌하는가?",
                 "존중": "자신의 생각보다는 팀(동료) 전체의 의견을 존중하는가?",
                 "상사와외 협조": "상사에 대해 협력하며 성과가 있는가?"
             },
@@ -81,7 +80,7 @@ EVAL_DATA = {
     "EN": {
         "1. Performance": {
             "Quantity of Work": {
-                "Speed": "Did you process work quickly without delay?",
+                "Speed": "Did you process work quickly without any delay?",
                 "Persistence": "Did you work consistently and persistently?",
                 "Efficiency": "Did you handle work accurately and efficiently?"
             },
@@ -120,25 +119,24 @@ EVAL_DATA = {
                 "Insight": "Do you grasp key points and reach conclusions?"
             },
             "Creativity": {
-                "Improvement": "Do you always seek improvements through ideas?"
+                "Improvement": "Do you always seek improvements through creative ideas?"
             },
             "Communication": {
                 "Verbal": "Are your verbal reporting skills clear?",
                 "Written": "Are your written reports clear and accurate?",
-                "Negotiation": "Ability to handle coordination and negotiation?"
+                "Negotiation": "Ability to handle coordination and negotiationmoothly?"
             }
         }
     }
 }
 
-# 리더십 평가 데이터 구조를 일반 평가와 100% 동일하게 3계층으로 통일
 LEADER_DATA = {
     "KO": {
         "1. 리더십(기본역량)": {
             "리더십": {
                 "고객지향": "내부 혹은 외부 고객의 요구를 능동적으로 찾아내고 적시에 대응한다",
                 "책임감": "특별한 지시를 하지 않더라도 업무목표를 달성하기 위해 계획적으로 행동한다.",
-                "팀워크지향": "구성원의 공감을 얻기 위해 자주 의견을 공유하고 배경을 설명한다."
+                "팀워크지향": "구성원의 공감을 얻기 위해 자주 의견을 공유하고배경을 설명한다."
             }
         },
         "2. 업무실적(실행역량)": {
@@ -175,12 +173,13 @@ LEADER_DATA = {
         "3. Knowledge(Professional)": {
             "Knowledge": {
                 "Analytical": "Identify exactly what information is needed to solve problems.",
-                "Detailed": "Investigate related regulations or practices to minimize issues."
+                "Detailed": "Investigate related regulations or past practices to minimize issues."
             }
         }
     }
 }
 
+# [대시보드 세부항목 합산 매핑 데이터]
 NORMAL_MAPPING = {
     "속도": "업무의 양", "지속성": "업무의 양", "능률": "업무의 양",
     "정확성": "업무의 질", "성과": "업무의 질", "꼼꼼함": "업무의 질",
@@ -219,22 +218,27 @@ UI = {
         "err": "⚠️ Provide detailed reasons.", "report_title": "🚀 Growth Report",
         "score": "Score", "basis": "Basis", "basis_msg": "※ Please provide detailed basis",
         "target": "Select Target", "self_info": "Self-Input", "done_msg": "Saved!", "pw_change": "🔒 Password Change",
-        "dash_title": "🔍 Summary by Sub-categories", "dash_desc": "Full target list. 2nd evaluation scores appear once finalized.",
+        "dash_title": "🔍 Aggregated Summary", "dash_desc": "Full target list. Scores are shown once finalized.",
         "contact_admin": f"📢 For corrections, please contact {ADMIN_INFO}."
     }
 }
 
+# --- [3] 데이터 처리 함수 ---
 def save_with_cleanup(recs, user_id, target_id, is_final, ws_name="Results"):
     try:
         df = conn.read(worksheet=ws_name, ttl=0).fillna("")
         if not df.empty:
             df = df.apply(lambda x: x.str.strip() if x.dtype == "object" else x)
             df = df[~((df['평가자'] == user_id) & (df['피평가자'] == target_id) & (df['구분'].str.contains("Draft", na=False)))]
-            if is_final: df = df[~((df['평가자'] == user_id) & (df['피평가자'] == target_id))]
+            if is_final:
+                df = df[~((df['평가자'] == user_id) & (df['피평가자'] == target_id))]
+        
         new_data = pd.DataFrame(recs)
         new_data['점수'] = pd.to_numeric(new_data['점수'], errors='coerce').fillna(0)
+        
         f_df = pd.concat([df, new_data], ignore_index=True)
-        conn.update(worksheet=ws_name, data=f_df); st.cache_data.clear()
+        conn.update(worksheet=ws_name, data=f_df)
+        st.cache_data.clear()
         return True
     except: return False
 
@@ -253,6 +257,7 @@ if not db_raw.empty:
                 if str(p).strip() == INITIAL_PW: st.session_state.need_pw_change = True
                 st.rerun()
             else: st.error("Login Error")
+            
     elif st.session_state.need_pw_change:
         L = UI[st.session_state.lang]
         st.title(L["pw_change"])
@@ -267,6 +272,7 @@ if not db_raw.empty:
                     db_f.loc[db_f['성명'] == st.session_state.user, '비밀번호'] = str(new_p)
                     conn.update(worksheet="Users", data=db_f); st.session_state.need_pw_change = False
                     st.cache_data.clear(); st.success("OK"); time.sleep(1); st.rerun()
+
     else:
         lang = st.session_state.lang if st.session_state.lang in UI else "KO"
         L, user = UI[lang], st.session_state.user
@@ -302,35 +308,53 @@ if not db_raw.empty:
 
                 if is_final_done: st.success(L["already"])
                 else:
-                    with st.form(key=f"f_{pre}_{target_name}_{ws_name}"):
+                    # [백화현상 해결의 핵심] 유연한 데이터 렌더링 엔진 루프
+                    with st.form(key=f"f_{pre}_{target_name}"):
                         tabs = st.tabs(list(data_dict.keys()))
                         res_dict = {}
                         for i, (major, subs) in enumerate(data_dict.items()):
                             with tabs[i]:
                                 if is_3rd:
                                     st.subheader(f"🔍 {major} Review")
+                                    # 3차 평가는 대분류별로 하나만 입력
                                     for sub_n, sub_items in subs.items():
-                                        for it_n, crit in sub_items.items():
+                                        st.markdown(f"#### 📍 {sub_n}")
+                                        it_it = sub_items.items() if isinstance(sub_items, dict) else {sub_n: sub_items}.items()
+                                        for it_n, crit in it_it:
                                             info = self_info.get(it_n, {"score": "-", "basis": ""}) if self_info else {"score": "-", "basis": ""}
                                             st.markdown(f"**{it_n}**: {info['score']} | {info['basis']}")
                                     st.divider()
                                     s = st.selectbox(L["score"], [1,2,3,4,5], index=2, key=f"s3_{target_name}_{major}"); r = st.text_area(L["basis"], key=f"r3_{target_name}_{major}")
-                                    res_dict[major] = {"score": 0, "basis": r}
+                                    res_dict[major] = {"score": 0, "basis": r} 
                                 else:
-                                    # 3계층(Cat > Sub > Item) 구조를 무조건 따르도록 강제하여 오류 방지
-                                    for sub_key, items in subs.items():
-                                        st.markdown(f"#### 📍 {sub_key}")
-                                        for it, crit in items.items():
-                                            saved = draft_vals[draft_vals['항목']==it] if not draft_vals.empty else pd.DataFrame()
+                                    # [백화현상 해결 루프] 탭 내의 데이터 구조를 유연하게 처리
+                                    for sub_key, items_or_desc in subs.items():
+                                        if isinstance(items_or_desc, dict):
+                                            st.markdown(f"#### 📍 {sub_key}")
+                                            # 중분류가 있는 경우 (예: 일반 평가)
+                                            for it, crit in items_or_desc.items():
+                                                saved = draft_vals[draft_vals['항목']==it] if not draft_vals.empty else pd.DataFrame()
+                                                init_s = int(float(saved.iloc[0]['점수'])) if not saved.empty else 3
+                                                init_b = str(saved.iloc[0]['근거']) if not saved.empty else ""
+                                                c1, c2, c3, c4 = st.columns([2, 3, 1, 3])
+                                                lbl = f"**{it}**"
+                                                if self_info and it in self_info: lbl += f"<br><span style='color:blue;'>[{L['self_info']}] {self_info[it]['score']}</span>"
+                                                c1.markdown(lbl, unsafe_allow_html=True); c2.info(crit)
+                                                s = c3.selectbox(L["score"], [1,2,3,4,5], index=max(0, min(4, init_s-1)), key=f"s_{target_name}_{it}")
+                                                r = c4.text_input(L["basis"], value=init_b, placeholder=L["basis_msg"], key=f"r_{target_name}_{it}")
+                                                res_dict[it] = {"score": s, "basis": r}
+                                        else:
+                                            # 중분류 없이 대분류 하위에 바로 항목이 있는 경우 (예: 리더십 평가 일부 구조)
+                                            saved = draft_vals[draft_vals['항목']==sub_key] if not draft_vals.empty else pd.DataFrame()
                                             init_s = int(float(saved.iloc[0]['점수'])) if not saved.empty else 3
                                             init_b = str(saved.iloc[0]['근거']) if not saved.empty else ""
                                             c1, c2, c3, c4 = st.columns([2, 3, 1, 3])
-                                            lbl = f"**{it}**"
-                                            if self_info and it in self_info: lbl += f"<br><span style='color:blue;'>[{L['self_info']}] {self_info[it]['score']}</span>"
-                                            c1.markdown(lbl, unsafe_allow_html=True); c2.info(crit)
-                                            s = c3.selectbox(L["score"], [1,2,3,4,5], index=max(0, min(4, init_s-1)), key=f"s_{target_name}_{it}")
-                                            r = c4.text_input(L["basis"], value=init_b, placeholder=L["basis_msg"], key=f"r_{target_name}_{it}")
-                                            res_dict[it] = {"score": s, "basis": r}
+                                            lbl = f"**{sub_key}**"
+                                            if self_info and sub_key in self_info: lbl += f"<br><span style='color:blue;'>[{L['self_info']}] {self_info[sub_key]['score']}</span>"
+                                            c1.markdown(lbl, unsafe_allow_html=True); c2.info(items_or_desc)
+                                            s = c3.selectbox(L["score"], [1,2,3,4,5], index=max(0, min(4, init_s-1)), key=f"s_{target_name}_{sub_key}")
+                                            r = c4.text_input(L["basis"], value=init_b, placeholder=L["basis_msg"], key=f"r_{target_name}_{sub_key}")
+                                            res_dict[sub_key] = {"score": s, "basis": r}
 
                         if pre == "self":
                             st.divider(); st.subheader(L["report_title"])
@@ -352,9 +376,7 @@ if not db_raw.empty:
                                 if save_with_cleanup(recs, user, target_name, is_f, ws_name): st.success(L["done_msg"]); st.cache_data.clear(); st.rerun()
             except Exception as e: st.error(f"Render Error: {str(e)}")
 
-        if menu == L["m1"]: render_form(EVAL_DATA[lang], "self", target_name=user)
-        elif menu == L["m5"]: render_form(LEADER_DATA[lang], "ld_self", ws_name="Leadership_Results", target_name=user)
-        elif menu == L["m2"]:
+        if menu == L["m2"]:
             target = st.selectbox(L["target"], t2_list, key="sel_m2")
             if target:
                 ts = res_df[(res_df['피평가자']==target)&(res_df['구분'].str.contains("자기", na=False))]
