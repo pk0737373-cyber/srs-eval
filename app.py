@@ -24,7 +24,7 @@ def get_data_cached(worksheet_name):
     except Exception:
         return pd.DataFrame()
 
-# --- [2] 평가 데이터 (상세 문구 100% 무삭제 반영) ---
+# --- [2] 평가 데이터 (무삭제 상세 지표 100% 반영) ---
 EVAL_DATA = {
     "KO": {
         "1. 업무실적": {
@@ -110,7 +110,7 @@ EVAL_DATA = {
         "3. Job Competency": {
             "Knowledge": {
                 "Job Knowledge": "Is your knowledge of duties broad and deep?",
-                "Related Knowledge": "Is your basic related knowledge sufficient?"
+                "Related Knowledge": "Is your basic knowledge of related work sufficient?"
             },
             "Judgment": {
                 "Speed": "How fast do you understand instructions and data?",
@@ -206,7 +206,7 @@ UI = {
         "err": "⚠️ 모든 항목의 근거를 상세히 작성해 주세요.", "report_title": "🚀 자기 성장 REPORT",
         "score": "점수", "basis": "근거 (상세히 작성)", "basis_msg": "※ 점수 산출 근거를 상세히 작성해 주세요",
         "target": "대상 선택", "self_info": "본인 입력", "done_msg": "저장되었습니다!", "pw_change": "🔒 비밀번호 변경 안내",
-        "dash_title": "🔍 세부항목별 합산 점수 요약", "dash_desc": "평가하신 결과가 세부항목 단위로 합산되어 표시됩니다. 상대평가의 적절성을 검토해 주세요.",
+        "dash_title": "🔍 세부항목별 합산 점수 요약", "dash_desc": "평가 대상자 전체 명단입니다. 평가 완료 시 점수가 합산되어 표시됩니다.",
         "contact_admin": f"💡 수정이 필요한 경우 관리자({ADMIN_INFO})에게 연락해 주세요."
     },
     "EN": {
@@ -217,7 +217,7 @@ UI = {
         "err": "⚠️ Provide detailed reasons.", "report_title": "🚀 Growth Report",
         "score": "Score", "basis": "Basis", "basis_msg": "※ Please provide detailed basis",
         "target": "Select Target", "self_info": "Self-Input", "done_msg": "Saved!", "pw_change": "🔒 Password Change",
-        "dash_title": "🔍 Summary by Sub-categories", "dash_desc": "Scores are aggregated by sub-category. Please review for relative fairness.",
+        "dash_title": "🔍 Summary by Sub-categories", "dash_desc": "Full list of targets. Scores appear once evaluation is completed.",
         "contact_admin": f"💡 For corrections, contact Admin ({ADMIN_INFO})."
     }
 }
@@ -251,7 +251,11 @@ if not db_raw.empty:
                 stored_pw = str(u.iloc[0]['비밀번호']).strip()
                 if str(p).strip() == stored_pw:
                     u_lang = str(u.iloc[0].get('언어', 'KO')).upper()
-                    st.session_state.update({'auth':True, 'user':n.strip(), 'ldr':str(u.iloc[0]['리더여부']).upper(), 'lang': u_lang if u_lang in ["KO", "EN"] else "KO"})
+                    st.session_state.update({
+                        'auth':True, 'user':n.strip(), 
+                        'ldr':str(u.iloc[0]['리더여부']).upper(), 
+                        'lang': u_lang if u_lang in ["KO", "EN"] else "KO"
+                    })
                     if stored_pw == INITIAL_PW: st.session_state.need_pw_change = True
                     st.rerun()
                 else: st.error("Password Incorrect")
@@ -280,7 +284,7 @@ if not db_raw.empty:
         res_df = get_data_cached("Results")
         ld_df = get_data_cached("Leadership_Results")
 
-        # [핵심] 김용환 대표님 전용 메뉴 필터링 로직
+        # 메뉴 리스트 생성 (김용환 대표님 예외 처리)
         m_list = []
         if user != "김용환":
             m_list.append(L["m1"])
@@ -314,7 +318,6 @@ if not db_raw.empty:
                 if is_final_done:
                     st.success(L["already"])
                 else:
-                    if not draft_vals.empty: st.warning("⚠️ Loaded draft content.")
                     form_id = f"f_vfinal_full_{pre}_{eval_type}_{target_name}_{ws_name}"
                     with st.form(key=form_id):
                         tabs = st.tabs(list(data_dict.keys()))
@@ -387,33 +390,61 @@ if not db_raw.empty:
                                 if save_with_cleanup(recs, user, target_name, True, ws_name): st.success(L["done_msg"]); st.cache_data.clear(); st.rerun()
             except Exception as e: st.error(f"⚠️ Error: {str(e)}")
 
-        # --- [대시보드: 합산 로직 완벽 반영] ---
+        # --- [대시보드: 전체 대상자 노출 및 합산 로직] ---
         if menu == L["m8"]:
             st.title(L["m8"])
             st.info(L["dash_desc"])
-            my_evals = res_df[(res_df['평가자']==user) & (res_df['구분'].str.contains("2차"))]
-            if my_evals.empty: st.warning("아직 최종 완료된 평가 내역이 없습니다.")
+            
+            # 1. 내 평가 대상자 리스트 생성 (db_raw 기준)
+            my_targets = db_raw[db_raw['2차평가자'] == user]['성명'].tolist()
+            
+            if not my_targets:
+                st.warning("평가 대상자가 없습니다.")
             else:
-                my_evals['세부항목'] = my_evals['항목'].map(NORMAL_MAPPING)
-                my_evals['점수'] = pd.to_numeric(my_evals['점수'], errors='coerce').fillna(0)
-                pivot = my_evals.pivot_table(index='피평가자', columns='세부항목', values='점수', aggfunc='sum').fillna(0)
-                pivot['총점 (125점)'] = pivot.sum(axis=1)
+                # 2. 결과 데이터에서 내 2차 평가 점수만 가져오기
+                my_evs = res_df[(res_df['평가자']==user) & (res_df['구분'].str.contains("2차"))]
+                
+                # 3. 빈 데이터프레임 생성 (대상자 기준)
+                dash_df = pd.DataFrame(index=my_targets)
+                dash_df.index.name = '피평가자'
+                
+                if not my_evs.empty:
+                    my_evs['세부항목'] = my_evs['항목'].map(NORMAL_MAPPING)
+                    my_evs['점수'] = pd.to_numeric(my_evs['점수'], errors='coerce').fillna(0)
+                    pivot = my_evs.pivot_table(index='피평가자', columns='세부항목', values='점수', aggfunc='sum').fillna(0)
+                    dash_df = dash_df.join(pivot).fillna(0)
+                else:
+                    # 데이터가 아예 없을 경우 0으로 채운 컬럼 생성
+                    for col in ["업무의 양", "업무의 질", "협조성", "근무의욕", "복무상황", "지식", "이해판단력", "창의연구력", "표현절충"]:
+                        dash_df[col] = 0
+                
+                dash_df['총점 (125점)'] = dash_df.sum(axis=1)
                 cols = ["업무의 양", "업무의 질", "협조성", "근무의욕", "복무상황", "지식", "이해판단력", "창의연구력", "표현절충", "총점 (125점)"]
-                st.dataframe(pivot[[c for c in cols if c in pivot.columns]], use_container_width=True)
+                st.dataframe(dash_df[[c for c in cols if c in dash_df.columns]], use_container_width=True)
                 st.divider(); st.warning(L["contact_admin"])
 
         elif menu == L["m9"]:
             st.title(L["m9"])
             st.info(L["dash_desc"])
-            my_evals_ld = ld_df[(ld_df['평가자']==user) & (ld_df['구분'].str.contains("2차"))]
-            if my_evals_ld.empty: st.warning("아직 최종 완료된 리더십 평가 내역이 없습니다.")
+            my_ldr_targets = db_raw[(db_raw['2차평가자'] == user) & (db_raw['리더여부'] == 'Y')]['성명'].tolist()
+            
+            if not my_ldr_targets:
+                st.warning("리더십 평가 대상자가 없습니다.")
             else:
-                my_evals_ld['점수'] = pd.to_numeric(my_evals_ld['점수'], errors='coerce').fillna(0)
-                pivot_ld = my_evals_ld.pivot_table(index='피평가자', columns='항목', values='점수', aggfunc='first').fillna(0)
-                pivot_ld['리더십 총점'] = pivot_ld.sum(axis=1)
-                st.dataframe(pivot_ld, use_container_width=True)
+                my_evs_ld = ld_df[(ld_df['평가자']==user) & (ld_df['구분'].str.contains("2차"))]
+                dash_ld_df = pd.DataFrame(index=my_ldr_targets)
+                dash_ld_df.index.name = '피평가자'
+                
+                if not my_evs_ld.empty:
+                    my_evs_ld['점수'] = pd.to_numeric(my_evs_ld['점수'], errors='coerce').fillna(0)
+                    pivot_ld = my_evs_ld.pivot_table(index='피평가자', columns='항목', values='점수', aggfunc='first').fillna(0)
+                    dash_ld_df = dash_ld_df.join(pivot_ld).fillna(0)
+                
+                dash_ld_df['리더십 총점'] = dash_ld_df.sum(axis=1)
+                st.dataframe(dash_ld_df, use_container_width=True)
                 st.divider(); st.warning(L["contact_admin"])
 
+        # --- [나머지 메뉴 핸들링] ---
         elif menu == L["m1"]: render_form(EVAL_DATA[lang], "self", target_name=user)
         elif menu == L["m5"]: render_form(LEADER_DATA[lang], "ld_self", ws_name="Leadership_Results", target_name=user)
         elif menu == L["m2"]:
