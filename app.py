@@ -51,17 +51,41 @@ EVAL_DATA = {
     }
 }
 
-# --- [3] 리더십 데이터 (이사님 원안 9항목 + 영문) ---
+# --- [3] 리더십 데이터 (오류 수정 완료) ---
 LEADER_DATA = {
     "KO": {
-        "리더십": {"고객지향": "내부 혹은 외부 고객의 요구를 능동적으로 찾아내고 적시에 대응한다", "책임감": "업무목표를 달성하기 위해 계획적으로 행동한다", "팀워크지향": "의사결정 배경이나 당위성에 대해 설명한다"},
-        "업무실적": {"개방적 의사소통": "자신의 사적인 부분을 먼저 이야기하여 친밀감 형성", "문제해결": "정보를 분석하여 문제의 근본원인을 규명한다", "조직이해": "전략, 운영방식, 역사 등을 파악한다", "프로젝트 관리": "정보를 체계적으로 수집하여 계획을 수립한다"},
-        "지식": {"분석적 사고": "필요한 정보나 자료가 무엇인지 정확히 파악한다", "세밀한 업무처리": "규정이나 과거 관행 등을 조사한다"}
+        "리더십": {
+            "고객지향": {"문구": "내부 혹은 외부 고객의 요구를 능동적으로 찾아내고 적시에 대응한다"},
+            "책임감": {"문구": "업무목표를 달성하기 위해 계획적으로 행동한다"},
+            "팀워크지향": {"문구": "의사결정 배경이나 당위성에 대해 설명한다"}
+        },
+        "업무실적": {
+            "개방적 의사소통": {"문구": "자신의 사적인 부분을 먼저 이야기하여 친밀감 형성"},
+            "문제해결": {"문구": "정보를 분석하여 문제의 근본원인을 규명한다"},
+            "조직이해": {"문구": "전략, 운영방식, 역사 등을 파악한다"},
+            "프로젝트 관리": {"문구": "정보를 체계적으로 수집하여 계획을 수립한다"}
+        },
+        "지식": {
+            "분석적 사고": {"문구": "필요한 정보나 자료가 무엇인지 정확히 파악한다"},
+            "세밀한 업무처리": {"문구": "규정이나 과거 관행 등을 조사한다"}
+        }
     },
     "EN": {
-        "Leadership": {"Customer": "Respond to customer needs proactively.", "Responsibility": "Act independently to achieve goals.", "Teamwork": "Explain decision backgrounds for consensus."},
-        "Performance": {"Communication": "Share personal aspects to build rapport.", "Solving": "Identify root causes by data analysis.", "Org. Insight": "Understand strategy and history.", "Project": "Establish systematic project plans."},
-        "Knowledge": {"Analytical": "Identify necessary information accurately.", "Detailed": "Investigate regulations and practices."}
+        "Leadership": {
+            "Customer": {"문구": "Respond to customer needs proactively."},
+            "Responsibility": {"문구": "Act independently to achieve goals."},
+            "Teamwork": {"문구": "Explain decision backgrounds for consensus."}
+        },
+        "Performance": {
+            "Communication": {"문구": "Share personal aspects to build rapport."},
+            "Problem Solving": {"문구": "Identify root causes by data analysis."},
+            "Org. Insight": {"문구": "Understand strategy and history."},
+            "Project": {"문구": "Establish systematic project plans."}
+        },
+        "Knowledge": {
+            "Analytical": {"문구": "Identify necessary information accurately."},
+            "Detailed": {"문구": "Investigate regulations and practices."}
+        }
     }
 }
 
@@ -120,7 +144,11 @@ if user_db is not None:
                             if self_data and it in self_data:
                                 label += f"<br><span style='color:blue; font-size: 0.85em;'>[{L['score']}: {self_data[it]['score']}]</span>"
                             c1.markdown(label, unsafe_allow_html=True)
-                            c2.caption(crit)
+                            
+                            # 데이터 구조에 따른 문구 추출
+                            display_text = crit if isinstance(crit, str) else crit.get("문구", "")
+                            c2.caption(display_text)
+                            
                             score = c3.selectbox(L["score"], [1,2,3,4,5], key=f"{pre}_{it}_s")
                             basis = c4.text_input(L["basis"], key=f"{pre}_{it}_r")
                             res_dict[it] = {"score": score, "basis": basis, "category": sub}
@@ -134,7 +162,9 @@ if user_db is not None:
             else:
                 eval_res = render_form(EVAL_DATA[lang], "self")
                 st.divider(); st.subheader(L["report"])
-                r1, r2, r3 = st.text_area("1.", key="r1"), st.text_area("2.", key="r2"), st.text_area("3.", key="r3")
+                r1 = st.text_area("1. 성과 요약", key="r1")
+                r2 = st.text_area("2. 역량 계획", key="r2")
+                r3 = st.text_area("3. 건의 사항", key="r3")
                 if st.button(L["sub"]):
                     if any(not v["basis"].strip() for v in eval_res.values()) or not r1.strip(): st.error(L["err"])
                     else:
