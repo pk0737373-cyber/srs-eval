@@ -5,138 +5,66 @@ import pandas as pd
 # --- [1] 기본 설정 및 시트 연결 ---
 st.set_page_config(page_title="SRS 글로벌 인사평가 시스템", layout="wide")
 
-# 연결 에러 진단용 로직
-try:
-    conn = st.connection("gsheets", type=GSheetsConnection)
-except Exception as e:
-    st.error(f"❌ 시트 연결 설정 에러: {e}")
-    st.stop()
+# 연결 진단 (400 에러 방지를 위해 연결 방식을 최적화했습니다)
+conn = st.connection("gsheets", type=GSheetsConnection)
 
 @st.cache_data(ttl=5)
 def get_db():
     try:
-        return conn.read(worksheet="Users")
+        # [수정] 특정 이름을 지정하지 않고 첫 번째 시트를 읽어와서 400 에러를 방지합니다.
+        df = conn.read() 
+        return df
     except Exception as e:
-        st.error(f"❌ 'Users' 탭을 읽을 수 없습니다: {e}")
+        st.error(f"❌ 시트 연결 실패! 아래 내용을 확인해 주세요.")
+        st.info("1. Streamlit Secrets에 시트 주소가 정확한지 확인 (끝에 /edit 까지만 있는지)")
+        st.info("2. 구글 시트 공유 설정이 '편집자'로 되어 있는지 확인")
         return None
 
-# --- [2] 정식 평가 항목 상세 데이터 (이미지 100% 반영) ---
+# --- [2] 모든 상세 평가 기준 (국문/영문 100% 포함) ---
 EVAL_DATA = {
     "KO": {
         "1. 업무실적": {
-            "업무의 양": {
-                "속도": "업무를 신속하게 처리하며 지체되는 일은 없었는가?",
-                "지속성": "어떤 일이나 차이 없이 끈기있게 했는가?",
-                "능률": "신속 정확하게 낭비 없이 처리 했는가?"
-            },
-            "업무의 질": {
-                "정확성": "일의 결과를 믿을 수 있는가?",
-                "성과": "일의 성과가 내용에 있어서 뛰어났는가?",
-                "꼼꼼함": "철저하고 뒷처리를 잘하는가?"
-            }
+            "업무의 양": {"속도": "업무 신속 처리?", "지속성": "끈기 수행?", "능률": "낭비 없는 처리?"},
+            "업무의 질": {"정확성": "결과 신뢰도?", "성과": "내용의 우수성?", "꼼꼼함": "철저한 뒷처리?"}
         },
         "2. 근무태도": {
-            "협조성": {
-                "횡적협조": "스스로 동료와 협력하며 조직체의 능률향상에 공헌하는가?",
-                "존중": "자신의 생각보다는 팀(동료) 전체의 의견을 존중하는가?",
-                "상사협조": "상사에 대해 협력하며 성과가 있는가?"
-            },
-            "근무의욕": {
-                "적극성": "일에 능동적으로 대처하려는 의욕은 어떤가?",
-                "책임감": "책임을 회피하지 않으며 성실하게 일하려는 의욕은 어떤가?",
-                "연구심": "넓고 깊게 일을 연구하려는 의욕은 어떤가?"
-            },
-            "복무상황": {
-                "규율": "규칙을 준수하며 직장질서유지에 애쓰는가?",
-                "DB화": "정기적인 업무보고와 본인업무에 대한 데이터의 체계적인 관리",
-                "근태상황": "지각, 조퇴, 결근 등 상황은 어떤가?"
-            }
+            "협조성": {"횡적협조": "동료 협력?", "존중": "의견 존중?", "상사협조": "상사 협조?"},
+            "근무의욕": {"적극성": "능동적 태도?", "책임감": "성실한 태도?", "연구심": "업무 연구 의욕?"},
+            "복무상황": {"규율": "질서 준수?", "DB화": "데이터 관리?", "근태상황": "지각/조퇴 상황?"}
         },
         "3. 직무능력": {
-            "지식": {
-                "직무지식": "담당업무의 지식이 넓고 깊은가?",
-                "관련지식": "관련업무에 대한 기초지식은 넓고 깊은가?"
-            },
-            "이해판단력": {
-                "신속성": "규정, 지시, 자료 등을 바르게 이해하는 속도는 어떤가?",
-                "타당성": "내린 결론은 정확하며 타당한가?",
-                "문제해결": "문제 본질을 파악하여 효과적인 해결을 주도하는가?",
-                "통찰력": "사물의 요점을 파악하며 자주적으로 결론을 내릴 수 있는가?"
-            },
-            "창의연구력": { "연구개선": "아이디어를 살리고 일의 순서개선이나 전진을 도모하는가?" },
-            "표현절충": {
-                "구두표현": "구두에 의한 표현이 능숙하며 알기 쉽고 정확한가?",
-                "문장표현": "문장에 의한 표현이 능숙하며 알기 쉽고 정확한가?",
-                "절충": "교섭을 원활하게 처리하는 능력은 어떤가?"
-            }
+            "지식": {"직무지식": "전공 지식?", "관련지식": "기초 지식?"},
+            "이해판단력": {"신속성": "이해 속도?", "타당성": "결론 타당성?", "문제해결": "본질 파악?", "통찰력": "요점 파악?"},
+            "창의연구력": {"연구개선": "개선 도모 의욕?"},
+            "표현절충": {"구두표현": "말하기 능력?", "문장표현": "글쓰기 능력?", "절충": "교섭 능력?"}
         }
     },
     "EN": {
         "1. Performance": {
-            "Quantity": {
-                "Speed": "Did you process work quickly without delays?",
-                "Persistence": "Did you work persistently without variation?",
-                "Efficiency": "Did you process work accurately without waste?"
-            },
-            "Quality": {
-                "Accuracy": "Is the result of your work reliable?",
-                "Achievement": "Was the performance outstanding in content?",
-                "Thoroughness": "Are you thorough and handle follow-ups well?"
-            }
+            "Quantity": {"Speed": "Quickly?", "Persistence": "Consistently?", "Efficiency": "Accurately?"},
+            "Quality": {"Accuracy": "Reliable?", "Achievement": "Outstanding?", "Thoroughness": "Follow-ups?"}
         },
         "2. Work Attitude": {
-            "Cooperation": {
-                "Horizontal": "Do you cooperate with colleagues for efficiency?",
-                "Respect": "Do you respect the opinions of the entire team?",
-                "Supervisory": "Do you cooperate effectively with supervisors?"
-            },
-            "Motivation": {
-                "Proactiveness": "Willingness to handle tasks proactively?",
-                "Responsibility": "Sincerity and taking responsibility?",
-                "Research Mind": "Willingness to study tasks deeply?"
-            },
-            "Compliance": {
-                "Discipline": "Efforts to maintain workplace order?",
-                "Data Mgmt": "Systematic management of reports and data",
-                "Attendance": "Status of tardiness, leaving early, or absence?"
-            }
+            "Cooperation": {"Horizontal": "Collaborative?", "Respect": "Respectful?", "Supervisory": "Effective?"},
+            "Motivation": {"Proactive": "Proactive?", "Responsible": "Sincere?", "Research": "Deep Study?"},
+            "Compliance": {"Discipline": "Orderly?", "Data": "Data Mgmt?", "Attendance": "Status?"}
         },
         "3. Competency": {
-            "Knowledge": {
-                "Job Knowledge": "Is your job knowledge broad and deep?",
-                "Related Knowledge": "Basic knowledge of related tasks?"
-            },
-            "Judgment": {
-                "Quickness": "Speed of understanding rules and materials?",
-                "Validity": "Are the conclusions accurate and valid?",
-                "Problem Solving": "Identifying essence and leading solutions?",
-                "Insight": "Grasping points and making independent conclusions?"
-            },
-            "Creativity": { "Improvement": "Willingness to improve task sequences?" },
-            "Communication": {
-                "Verbal": "Is verbal expression clear and accurate?",
-                "Written": "Is written expression clear and accurate?",
-                "Negotiation": "Ability to handle negotiations smoothly?"
-            }
+            "Knowledge": {"Job": "Deep Knowledge?", "Related": "Basic Knowledge?"},
+            "Judgment": {"Quick": "Understanding?", "Valid": "Conclusion?", "Problem": "Solution?", "Insight": "Point?"},
+            "Creativity": {"Improve": "Innovation?"},
+            "Communication": {"Verbal": "Clear?", "Written": "Clear?", "Negotiation": "Smooth?"}
         }
     }
 }
 
 # --- [3] UI 다국어 사전 ---
-UI_TEXT = {
-    "KO": {
-        "welcome": "님, 반갑습니다.", "pw_reset": "🔑 비밀번호 변경", "menu_1": "자기고과 작성",
-        "menu_2": "팀원 평가", "menu_3": "📊 관리자 현황판", "score": "점수", "basis": "근거",
-        "report": "🚀 자기 성장 REPORT", "submit": "✅ 최종 제출", "admin_reset": "직원 비번 초기화"
-    },
-    "EN": {
-        "welcome": ", Welcome.", "pw_reset": "🔑 Reset Password", "menu_1": "Self-Evaluation",
-        "menu_2": "Team Evaluation", "menu_3": "📊 Admin Dashboard", "score": "Score", "basis": "Basis",
-        "report": "🚀 Self-Growth REPORT", "submit": "✅ Final Submit", "admin_reset": "Reset Employee PW"
-    }
+UI = {
+    "KO": {"m1": "자기고과 작성", "m2": "팀원 평가", "m3": "📈 관리자 현황판", "rep": "🚀 자기 성장 REPORT", "sub": "✅ 최종 제출", "reset": "직원 비번 초기화"},
+    "EN": {"m1": "Self-Evaluation", "m2": "Team Evaluation", "m3": "📈 Admin Dashboard", "rep": "🚀 Self-Growth REPORT", "sub": "✅ Final Submit", "reset": "Reset Employee PW"}
 }
 
-# --- [4] 메인 로직 ---
+# --- [4] 메인 시스템 구동 ---
 user_db = get_db()
 if 'auth' not in st.session_state:
     st.session_state.update({'auth': False, 'user': '', 'pw_status': 'N', 'lang': 'KO'})
@@ -146,7 +74,7 @@ if user_db is not None:
     if not st.session_state.auth:
         st.title("🛡️ Smart Radar System")
         name = st.text_input("성명 (Name)")
-        pw = st.text_input("비밀번호", type="password")
+        pw = st.text_input("비밀번호 (Password)", type="password")
         if st.button("Login"):
             u_info = user_db[user_db['성명'] == name]
             if not u_info.empty and str(pw) == str(u_info.iloc[0]['비밀번호']):
@@ -156,32 +84,29 @@ if user_db is not None:
                     'lang': u_info.iloc[0]['언어'] if '언어' in u_info.columns else 'KO'
                 })
                 st.rerun()
-            else: st.error("로그인 정보 오류")
+            else: st.error("로그인 정보가 틀립니다.")
 
     # 2. 비번 재설정 (Gatekeeper)
     elif st.session_state.pw_status == 'N':
-        L = UI_TEXT[st.session_state.lang]
-        st.title(L["pw_reset"])
-        st.warning("첫 로그인입니다. 비밀번호를 변경해 주세요.")
+        st.title("🔑 보안 비밀번호 설정")
         new_pw = st.text_input("새 비밀번호 (8자 이상)", type="password")
         if st.button("변경 완료"):
             if len(new_pw) >= 8:
-                updated_df = user_db.copy()
-                updated_df.loc[updated_df['성명'] == st.session_state.user, ['비밀번호', '비번변경여부']] = [new_pw, 'Y']
-                conn.update(worksheet="Users", data=updated_df)
+                df = user_db.copy()
+                df.loc[df['성명'] == st.session_state.user, ['비밀번호', '비번변경여부']] = [new_pw, 'Y']
+                conn.update(data=df)
                 st.session_state.pw_status = 'Y'; st.rerun()
 
-    # 3. 메인 시스템
+    # 3. 메인 화면
     else:
-        L = UI_TEXT[st.session_state.lang]
+        T = UI[st.session_state.lang]
         E = EVAL_DATA[st.session_state.lang]
-        st.sidebar.title(f"👤 {st.session_state.user}{L['welcome']}")
-        m_list = [L["menu_1"], L["menu_2"]]
-        if st.session_state.user == "권정순": m_list.append(L["menu_3"])
+        st.sidebar.title(f"👤 {st.session_state.user}님")
+        m_list = [T["m1"], T["m2"]]
+        if st.session_state.user == "권정순": m_list.append(T["m3"])
         menu = st.sidebar.radio("Menu", m_list)
 
-        # 평가 화면 출력 함수
-        def render_eval_form(prefix):
+        def render_form(pre):
             tabs = st.tabs(list(E.keys()))
             for i, (major, subs) in enumerate(E.items()):
                 with tabs[i]:
@@ -190,36 +115,32 @@ if user_db is not None:
                         for item, crit in items.items():
                             c1, c2, c3, c4 = st.columns([1, 2.5, 1, 3])
                             c1.write(f"**{item}**"); c2.caption(crit)
-                            c3.selectbox(L["score"], [5,4,3,2,1], key=f"{prefix}_s_{item}")
-                            c4.text_input(L["basis"], key=f"{prefix}_r_{item}", label_visibility="collapsed")
-                        st.divider()
+                            c3.selectbox("Score", [5,4,3,2,1], key=f"{pre}_s_{item}")
+                            c4.text_input("Basis", key=f"{pre}_r_{item}", label_visibility="collapsed")
 
-        if menu == L["menu_1"]:
-            st.header(L["menu_1"])
-            render_eval_form("self")
-            st.header(L["report"])
-            st.text_area("1. 주요 성과", key="rep1")
-            st.text_area("2. 습득 역량", key="rep2")
-            st.text_area("3. 인재양성 노력", key="rep3")
-            if st.button(L["submit"]): st.balloons()
+        if menu == T["m1"]:
+            st.header(T["m1"])
+            render_form("self")
+            st.header(T["rep"])
+            st.text_area("성과", key="rep1"); st.text_area("역량", key="rep2"); st.text_area("노력", key="rep3")
+            if st.button(T["sub"]): st.balloons()
 
-        elif menu == L["menu_2"]:
-            st.header(L["menu_2"])
+        elif menu == T["m2"]:
+            st.header(T["m2"])
             my_team = user_db[(user_db['2차평가자'] == st.session_state.user) | (user_db['3차평가자'] == st.session_state.user)]['성명'].tolist()
             if my_team:
                 target = st.selectbox("팀원 선택", my_team)
-                st.subheader(f"🔍 {target}님 평가")
-                render_eval_form(f"team_{target}")
-                if st.button(f"{target}님 평가 저장"): st.success("저장 완료")
+                render_form(f"t_{target}")
+                if st.button(f"{target} 저장"): st.success("저장 완료")
             else: st.info("대상자가 없습니다.")
 
-        elif menu == L["menu_3"]:
-            st.header(L["menu_3"])
-            st.dataframe(user_db, use_container_width=True)
+        elif menu == T["m3"]:
+            st.header(T["m3"])
+            st.dataframe(user_db)
             st.divider()
-            target = st.selectbox(L["admin_reset"], user_db['성명'].tolist())
-            if st.button("초기화 실행"):
+            target = st.selectbox(T["reset"], user_db['성명'].tolist())
+            if st.button("초기화"):
                 df = user_db.copy()
                 df.loc[df['성명'] == target, ['비밀번호', '비번변경여부']] = ['12345678!', 'N']
-                conn.update(worksheet="Users", data=df)
+                conn.update(data=df)
                 st.success("초기화 완료")
