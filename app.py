@@ -5,7 +5,7 @@ import datetime
 from datetime import timedelta
 import time
 
-# --- [0] 보안 및 관리자 정보 ---
+# --- [0] 보안 및 관리자 설정 ---
 INITIAL_PW = "12345678!"
 ADMIN_INFO = "경영관리부 권정순 이사 (010-2912-1408)"
 
@@ -13,7 +13,7 @@ ADMIN_INFO = "경영관리부 권정순 이사 (010-2912-1408)"
 st.set_page_config(page_title="SRS Global HR System", layout="wide")
 conn = st.connection("gsheets", type=GSheetsConnection)
 
-# 구글 API 차단 방지를 위한 캐싱 (60초)
+# 구글 API 차단 방지를 위한 캐싱 (60초 유지)
 @st.cache_data(ttl=60)
 def get_data_cached(worksheet_name):
     try:
@@ -24,7 +24,7 @@ def get_data_cached(worksheet_name):
     except Exception:
         return pd.DataFrame()
 
-# --- [2] 평가 데이터 (상세 문구 100% 무삭제 반영) ---
+# --- [2] 평가 데이터 (이사님 설계안 상세 문구 100% 무삭제 반영) ---
 EVAL_DATA = {
     "KO": {
         "1. 업무실적": {
@@ -270,15 +270,18 @@ if not db_raw.empty:
         if user != "김용환":
             m_list.append(L["m1"])
             if st.session_state.ldr == 'Y': m_list.append(L["m5"])
-        t2, t3 = db_raw[db_raw['2차평가자'] == user]['성명'].tolist(), db_raw[db_raw['3차평가자'] == user]['성명'].tolist()
-        if t2: 
+        t2_list = db_raw[db_raw['2차평가자'] == user]['성명'].tolist()
+        t3_list = db_raw[db_raw['3차평가자'] == user]['성명'].tolist()
+        if t2_list: 
             m_list.append(L["m2"])
-            m_list.append(L["m8"]) # 일반평가 대시보드
-        if db_raw[(db_raw['2차평가자'] == user) & (db_raw['리더여부'] == 'Y')].any().any(): 
+            m_list.append(L["m8"]) 
+        ldr_t2_list = db_raw[(db_raw['2차평가자'] == user) & (db_raw['리더여부'] == 'Y')]['성명'].tolist()
+        if ldr_t2_list:
             m_list.append(L["m6"])
-            m_list.append(L["m9"]) # 리더십평가 대시보드
-        if t3: m_list.append(L["m3"])
-        if db_raw[(db_raw['3차평가자'] == user) & (db_raw['리더여부'] == 'Y')].any().any(): m_list.append(L["m7"])
+            m_list.append(L["m9"]) 
+        if t3_list: m_list.append(L["m3"])
+        ldr_t3_list = db_raw[(db_raw['3차평가자'] == user) & (db_raw['리더여부'] == 'Y')]['성명'].tolist()
+        if ldr_t3_list: m_list.append(L["m7"])
         if user == "권정순": m_list.append(L["m4"])
         
         menu = st.sidebar.radio("Menu", m_list)
@@ -294,8 +297,7 @@ if not db_raw.empty:
                 if is_final_done:
                     st.success(L["already"])
                 else:
-                    if not draft_vals.empty: st.warning("⚠️ Loaded draft content.")
-                    form_id = f"f_vfinal_full_{pre}_{eval_type}_{target_name}_{ws_name}"
+                    form_id = f"f_final_full_{pre}_{eval_type}_{target_name}_{ws_name}"
                     with st.form(key=form_id):
                         tabs = st.tabs(list(data_dict.keys()))
                         res_dict = {}
@@ -354,18 +356,16 @@ if not db_raw.empty:
                                 if save_with_cleanup(recs, user, target_name, is_f, ws_name): st.success(L["done_msg"]); st.cache_data.clear(); st.rerun()
             except Exception: st.error("⚠️ 데이터 처리 오류")
 
-        # --- [신규 메뉴 1: 2차 팀원평가 대시보드] ---
         if menu == L["m8"]:
             st.title(L["m8"])
             st.markdown(f"#### 🔍 {user}님이 평가한 일반 팀원 점수 요약")
             my_evals = res_df[(res_df['평가자']==user) & (res_df['구분'].str.contains("2차"))]
-            if my_evals.empty: st.warning("아직 제출된 일반 팀원 평가 내역이 없습니다.")
+            if my_evals.empty: st.warning("아직 최종 제출된 일반 팀원 평가 내역이 없습니다.")
             else:
                 pivot_df = my_evals.pivot_table(index='피평가자', columns='항목', values='점수', aggfunc='first').fillna("-")
                 st.dataframe(pivot_df, use_container_width=True)
                 st.divider(); st.warning(L["contact_admin"])
 
-        # --- [신규 메뉴 2: 2차 리더십평가 대시보드] ---
         elif menu == L["m9"]:
             st.title(L["m9"])
             st.markdown(f"#### 🏆 {user}님이 평가한 리더 리더십 점수 요약")
@@ -379,7 +379,7 @@ if not db_raw.empty:
         elif menu == L["m1"]: render_form(EVAL_DATA[lang], "self", target_name=user)
         elif menu == L["m5"]: render_form(LEADER_DATA[lang], "ld", ws_name="Leadership_Results", target_name=user)
         elif menu == L["m2"]:
-            target = st.selectbox(L["target"], t2, key="sel_m2_f")
+            target = st.selectbox(L["target"], t2_list, key="sel_m2_f")
             if target and not res_df.empty:
                 ts = res_df[(res_df['피평가자']==target)&(res_df['구분'].str.contains("자기", na=False))]
                 if ts.empty: st.warning(f"⚠️ {target}님이 아직 자기고과를 제출하지 않았습니다.")
@@ -387,7 +387,7 @@ if not db_raw.empty:
                     si = {row['항목']: {'score': row['점수'], 'basis': row['근거']} for _, row in ts.iterrows()}
                     render_form(EVAL_DATA[lang], "ev2", si, eval_type="2차", target_name=target)
         elif menu == L["m6"]:
-            target_ldr = st.selectbox(L["target"], db_raw[(db_raw['2차평가자'] == user) & (db_raw['리더여부'] == 'Y')]['성명'].tolist(), key="sel_m6_f")
+            target_ldr = st.selectbox(L["target"], ldr_t2_list, key="sel_m6_f")
             if target_ldr and not ld_df.empty:
                 ls = ld_df[(ld_df['피평가자']==target_ldr)&(ld_df['구분'].str.contains("자기", na=False))]
                 if ls.empty: st.warning(f"⚠️ {target_ldr}님이 아직 리더십 자기평가를 제출하지 않았습니다.")
@@ -395,7 +395,7 @@ if not db_raw.empty:
                     si = {row['항목']: {'score': row['점수'], 'basis': row['근거']} for _, row in ls.iterrows()}
                     render_form(LEADER_DATA[lang], "ld2", si, eval_type="2차", ws_name="Leadership_Results", target_name=target_ldr)
         elif menu == L["m3"]:
-            target = st.selectbox(L["target"], t3, key="sel_m3_f")
+            target = st.selectbox(L["target"], t3_list, key="sel_m3_f")
             if target and not res_df.empty:
                 ts = res_df[(res_df['피평가자']==target)&(res_df['구분'].str.contains("자기", na=False))]
                 if ts.empty: st.warning("⚠️ Waiting for self-evaluation...")
@@ -403,9 +403,26 @@ if not db_raw.empty:
                     si = {row['항목']: {'score': row['점수'], 'basis': row['근거']} for _, row in ts.iterrows()}
                     render_form(EVAL_DATA[lang], "ev3", si, eval_type="3차", is_3rd=True, target_name=target)
         elif menu == L["m7"]:
-            target_ldr3 = st.selectbox(L["target"], db_raw[(db_raw['3차평가자'] == user) & (db_raw['리더여부'] == 'Y')]['성명'].tolist(), key="sel_m7_f")
+            target_ldr3 = st.selectbox(L["target"], ldr_t3_list, key="sel_m7_f")
             if target_ldr3 and not ld_df.empty:
                 ls3 = ld_df[(ld_df['피평가자']==target_ldr3)&(ld_df['구분'].str.contains("자기", na=False))]
                 if ls3.empty: st.warning("⚠️ Waiting for leadership self-eval...")
                 else:
-                    si3 = {row['항목']: {'score': row['점수'], '
+                    si3 = {row['항목']: {'score': row['점수'], 'basis': row['근거']} for _, row in ls3.iterrows()}
+                    render_form(LEADER_DATA[lang], "ld3", si3, eval_type="3차", ws_name="Leadership_Results", is_3rd=True, target_name=target_ldr3)
+        elif menu == L["m4"]:
+            st.title(L["m4"])
+            status_df = []
+            for _, r in db_raw.iterrows():
+                nm = r['성명']
+                s_stat = "✅" if not res_df.empty and nm in res_df[res_df['구분'].str.contains("자기", na=False)]['피평가자'].values else "⏳"
+                l_stat = "✅" if not ld_df.empty and nm in ld_df[ld_df['구분'].str.contains("자기", na=False)]['피평가자'].values else ("-" if r['리더여부']=='N' else "⏳")
+                status_df.append({"Name": nm, "Self-Eval": s_stat, "Leadership": l_stat})
+            st.table(pd.DataFrame(status_df))
+            st.divider()
+            sel_u = st.selectbox("Employee", db_raw['성명'].tolist(), key="admin_sel")
+            new_pw = st.text_input("New PW", type="password", key="admin_pw")
+            if st.button("Update PW"):
+                db_full = conn.read(worksheet="Users", ttl=0)
+                db_full.loc[db_full['성명'] == sel_u, '비밀번호'] = str(new_pw)
+                conn.update(worksheet="Users", data=db_full); st.success("Updated!"); st.cache_data.clear()
