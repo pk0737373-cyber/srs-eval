@@ -11,31 +11,28 @@ INITIAL_PW = "12345678!"
 ADMIN_INFO = "경영관리부 권정순 이사 (010-2912-1408)"
 
 def check_password_strength(pw):
-    """비밀번호 정책 검증: 8자 이상, 영문, 숫자, 특수문자 포함"""
-    if len(pw) < 8:
-        return False
-    if not re.search("[a-zA-Z]", pw):
-        return False
-    if not re.search("[0-9]", pw):
-        return False
-    if not re.search("[!@#$%^&*(),.?\":{}|<>]", pw):
-        return False
+    """비밀번호 정책: 8자 이상, 영문, 숫자, 특수문자 포함 여부 체크"""
+    if len(pw) < 8: return False
+    if not re.search("[a-zA-Z]", pw): return False
+    if not re.search("[0-9]", pw): return False
+    if not re.search("[!@#$%^&*(),.?\":{}|<>]", pw): return False
     return True
 
-# --- [1] 기본 설정 ---
+# --- [1] 기본 설정 및 데이터 로딩 ---
 st.set_page_config(page_title="SRS Global HR System", layout="wide")
 conn = st.connection("gsheets", type=GSheetsConnection)
 
 def get_data_fresh(worksheet_name):
+    """데이터 로드 실패 시 백화현상을 방지하기 위한 안전장치 포함"""
     try:
-        # 실시간성 확보를 위해 캐시 없이 데이터 로드
         df = conn.read(worksheet=worksheet_name, ttl=0)
         if df is not None:
-            # 전체 데이터 정제
             df = df.apply(lambda x: x.str.strip() if x.dtype == "object" else x).fillna("")
             return df
         return pd.DataFrame()
-    except Exception:
+    except Exception as e:
+        # 에러 발생 시 로그만 찍고 빈 데이터프레임 반환하여 시스템 다운 방지
+        print(f"Error loading {worksheet_name}: {e}")
         return pd.DataFrame()
 
 # --- [2] 평가 데이터 (이사님 설계안 상세 문구 100% 무삭제 복구) ---
@@ -195,15 +192,11 @@ LEADER_DATA = {
 
 # --- [3] 매핑 및 UI 사전 ---
 NORMAL_MAPPING = {
-    "속도": "업무의 양", "지속성": "업무의 양", "능률": "업무의 양",
-    "정확성": "업무의 질", "성과": "업무의 질", "꼼꼼함": "업무의 질",
-    "횡적협조": "협조성", "존중": "협조성", "상사와외 협조": "협조성",
-    "적극성": "근무의욕", "책임감": "근무의욕", "연구심": "근무의욕",
-    "규율": "복무상황", "DB화": "복무상황", "근태상황": "복무상황",
-    "직무지식": "지식", "관련지식": "지식",
+    "속도": "업무의 양", "지속성": "업무의 양", "능률": "업무의 양", "정확성": "업무의 질", "성과": "업무의 질", "꼼꼼함": "업무의 질",
+    "횡적협조": "협조성", "존중": "협조성", "상사와외 협조": "협조성", "적극성": "근무의욕", "책임감": "근무의욕", "연구심": "근무의욕",
+    "규율": "복무상황", "DB화": "복무상황", "근태상황": "복무상황", "직무지식": "지식", "관련지식": "지식",
     "신속성": "이해판단력", "타당성": "이해판단력", "문제해결": "이해판단력", "통찰력": "이해판단력",
-    "연구개선": "창의연구력",
-    "구두표현": "표현절충", "문장표현": "표현절충", "절충": "표현절충"
+    "연구개선": "창의연구력", "구두표현": "표현절충", "문장표현": "표현절충", "절충": "표현절충"
 }
 LEADER_MAPPING = {"고객지향": "리더십", "책임감": "리더십", "팀워크지향": "리더십", "개방적 의사소통": "업무실적", "문제해결": "업무실적", "조직이해": "업무실적", "프로젝트 관리": "업무실적", "분석적사고": "지식", "세밀한업무처리": "지식"}
 
@@ -243,10 +236,10 @@ def save_with_cleanup(recs, user_id, target_id, is_final, ws_name="Results"):
         df = conn.read(worksheet=ws_name, ttl=0).fillna("")
         if not df.empty:
             df = df.apply(lambda x: x.str.strip() if x.dtype == "object" else x)
-            # 기존 Draft 데이터 제거
+            # 기존 Draft 데이터 제거 (덮어쓰기 로직)
             df = df[~((df['평가자'] == user_id) & (df['피평가자'] == target_id) & (df['구분'].str.contains("Draft", na=False)))]
             if is_final:
-                # 최종 제출 시 기존 모든 데이터 제거 후 덮어쓰기
+                # 최종 제출 시 기존 해당 조합의 모든 데이터 제거 후 새로 추가
                 df = df[~((df['평가자'] == user_id) & (df['피평가자'] == target_id))]
         
         new_data = pd.DataFrame(recs)
@@ -259,9 +252,13 @@ def save_with_cleanup(recs, user_id, target_id, is_final, ws_name="Results"):
 
 # --- [5] 메인 엔진 가동 ---
 if 'auth' not in st.session_state: st.session_state.update({'auth':False, 'user':'', 'ldr':'N', 'lang':'KO', 'need_pw_change':False})
+
+# [백화현상 방지] Users 시트를 먼저 로드하고 실패 시 안내
 db_raw = get_data_fresh("Users")
 
-if not db_raw.empty:
+if db_raw.empty:
+    st.error("⚠️ 시스템 데이터베이스 연결에 실패했습니다. 페이지를 새로고침(F5) 해주세요.")
+else:
     if not st.session_state.auth:
         st.title("🛡️ Smart Radar System HR")
         n, p = st.text_input("Name"), st.text_input("PW", type="password")
@@ -280,12 +277,12 @@ if not db_raw.empty:
     elif st.session_state.need_pw_change:
         L = UI[st.session_state.lang]
         st.title(L["pw_change"])
-        st.warning("비밀번호 정책: 영문, 숫자, 특수문자를 포함하여 8자 이상")
+        st.warning("영문, 숫자, 특수문자를 모두 포함하여 8자 이상으로 변경해야 합니다.")
         with st.form("pw_form"):
             new_p = st.text_input("New PW", type="password"); confirm_p = st.text_input("Confirm", type="password")
             if st.form_submit_button("Change and Start"):
-                if not check_password_strength(new_p): st.error("⚠️ 비밀번호 정책 미달 (영문+숫자+특수문자 포함 8자 이상)")
-                elif new_p != confirm_p: st.error("⚠️ 비밀번호가 서로 다릅니다.")
+                if not check_password_strength(new_p): st.error("⚠️ 보안 취약 (영문+숫자+특수문자 조합 8자 이상 필수)")
+                elif new_p != confirm_p: st.error("⚠️ 비밀번호 불일치")
                 else:
                     db_f = conn.read(worksheet="Users", ttl=0)
                     db_f.loc[db_f['성명'] == st.session_state.user, '비밀번호'] = str(new_p)
@@ -297,7 +294,6 @@ if not db_raw.empty:
         L, user = UI[lang], st.session_state.user
         res_df, ld_df = get_data_fresh("Results"), get_data_fresh("Leadership_Results")
 
-        # 메뉴 구성 (대표님 예외 포함)
         m_list = []
         if user != "김용환":
             m_list.append(L["m1"])
@@ -324,14 +320,14 @@ if not db_raw.empty:
                 check_df = res_df if ws_name == "Results" else ld_df
                 existing = check_df[(check_df['평가자']==user) & (check_df['피평가자']==target_name)] if not check_df.empty else pd.DataFrame()
                 
-                # [수정] Draft 상태면 입력창을 열어주고, Final이 존재할 때만 완료 처리
+                # [수정] Draft가 있어도 Final(최종)이 없으면 입력 창이 뜨도록 판별식 정교화
                 is_final_done = not existing[existing['구분'].str.contains("Final|최종", na=False) & ~existing['구분'].str.contains("Draft", na=False)].empty
                 draft_vals = existing[existing['구분'].str.contains("Draft", na=False)] if not existing.empty else pd.DataFrame()
 
                 if is_final_done: st.success(L["already"])
                 else:
                     if not draft_vals.empty: st.warning("⚠️ Loaded temporary saved data.")
-                    with st.form(key=f"f_long_{pre}_{target_name}_{ws_name}"):
+                    with st.form(key=f"f_final_{pre}_{target_name}"):
                         tabs = st.tabs(list(data_dict.keys()))
                         res_dict = {}
                         for i, (major, subs) in enumerate(data_dict.items()):
@@ -340,27 +336,25 @@ if not db_raw.empty:
                                     st.subheader(f"🔍 {major} Review")
                                     s_sum, l2_sum, count = 0, 0, 0
                                     for sub_n, sub_items in subs.items():
-                                        it_iterator = sub_items.items() if isinstance(sub_items, dict) else {sub_n: sub_items}.items()
-                                        for it_n, crit in it_iterator:
+                                        it_it = sub_items.items() if isinstance(sub_items, dict) else {sub_n: sub_items}.items()
+                                        for it_n, crit in it_it:
                                             s_data = self_info.get(it_n, {"score": 0, "basis": "-"}) if self_info else {"score": 0, "basis": "-"}
                                             l2_data = l2_info.get(it_n, {"score": 0, "basis": "-", "evaluator": ""}) if l2_info else {"score": 0, "basis": "-", "evaluator": ""}
                                             s_sum += pd.to_numeric(s_data['score'], errors='coerce'); l2_sum += pd.to_numeric(l2_data['score'], errors='coerce'); count += 1
                                             st.markdown(f"**{it_n}**")
-                                            c1, c2 = st.columns(2)
-                                            c1.caption(f"[{L['self_info']}] {s_data['score']} | {s_data['basis']}")
-                                            c2.caption(f"[{l2_data.get('evaluator', L['l2_info'])}] {l2_data['score']} | {l2_data['basis']}")
+                                            c1, c2 = st.columns(2); c1.caption(f"[{L['self_info']}] {s_data['score']} | {s_data['basis']}"); c2.caption(f"[{l2_data.get('evaluator', L['l2_info'])}] {l2_data['score']} | {l2_data['basis']}")
                                     max_v = count * 5
-                                    st.info(f"📊 {major} 요약 - 피평가자: **{int(s_sum)}점** | 2차: **{int(l2_sum)}점** | (만점: **{max_v}점**)")
+                                    st.info(f"📊 {major} Summary - Self: **{int(s_sum)}** | 2nd: **{int(l2_sum)}** | **(Max: {max_v})**")
                                     st.divider()
-                                    s = st.number_input(f"3차 {major} {L['score']} (0~{max_v})", 0, max_v, value=int(l2_sum), key=f"s3_{target_name}_{major}")
+                                    s = st.number_input(f"Final {major} {L['score']} (0~{max_v})", 0, max_v, value=int(l2_sum), key=f"s3_{target_name}_{major}")
                                     r = st.text_area(L["basis"], key=f"r3_{target_name}_{major}")
                                     res_dict[major] = {"score": s, "basis": r}
                                 else:
-                                    # 자기고과 및 2차 평가 루프
-                                    for sub_key, items in subs.items():
-                                        if isinstance(items, dict):
+                                    # 계층 구조 유연하게 처리하여 백화현상 방지
+                                    for sub_key, items_or_desc in subs.items():
+                                        if isinstance(items_or_desc, dict):
                                             st.markdown(f"#### 📍 {sub_key}")
-                                            for it, crit in items.items():
+                                            for it, crit in items_or_desc.items():
                                                 saved = draft_vals[draft_vals['항목']==it] if not draft_vals.empty else pd.DataFrame()
                                                 init_s = int(pd.to_numeric(saved['점수'], errors='coerce').iloc[0]) if not saved.empty else 3
                                                 init_b = str(saved.iloc[0]['근거']) if not saved.empty else ""
@@ -372,16 +366,15 @@ if not db_raw.empty:
                                                 r = c4.text_input(L["basis"], value=init_b, placeholder=L["basis_msg"], key=f"r_{target_name}_{it}_{ws_name}")
                                                 res_dict[it] = {"score": s, "basis": r}
                                         else:
-                                            # 리더십 지표 대응
                                             saved = draft_vals[draft_vals['항목']==sub_key] if not draft_vals.empty else pd.DataFrame()
                                             init_s = int(pd.to_numeric(saved['점수'], errors='coerce').iloc[0]) if not saved.empty else 3
                                             init_b = str(saved.iloc[0]['근거']) if not saved.empty else ""
-                                            c1, c2, c3, c4 = st.columns([2, 4, 1, 3]); c1.markdown(f"**{sub_key}**"); c2.info(items)
+                                            c1, c2, c3, c4 = st.columns([2, 4, 1, 3]); c1.markdown(f"**{sub_key}**"); c2.info(items_or_desc)
                                             s = c3.selectbox(L["score"], [1,2,3,4,5], index=max(0, min(4, init_s-1)), key=f"s_{target_name}_{sub_key}_{ws_name}")
                                             r = c4.text_input(L["basis"], value=init_b, placeholder=L["basis_msg"], key=f"r_{target_name}_{sub_key}_{ws_name}")
                                             res_dict[sub_key] = {"score": s, "basis": r}
 
-                        if pre == "self":
+                        if pre == "self": # 영문에서도 REPORT 표시되도록 일원화
                             st.divider(); st.subheader(L["report_title"])
                             rep_data = {}
                             for k, v in REPORT_QS[lang].items():
@@ -392,7 +385,6 @@ if not db_raw.empty:
                         btn_s, btn_f = bc1.form_submit_button(L["save"]), bc2.form_submit_button(L["sub"])
                         if btn_s or btn_f:
                             is_f = btn_f
-                            # [핵심] 근거 5자 이상 필수 입력 검증
                             if is_f and any(len(str(v["basis"]).strip()) < 5 for v in res_dict.values()): st.error(L["err"])
                             else:
                                 now = (datetime.datetime.now()+timedelta(hours=9)).strftime("%Y-%m-%d %H:%M")
@@ -402,7 +394,7 @@ if not db_raw.empty:
                                 if save_with_cleanup(recs, user, target_name, is_f, ws_name): st.success(L["done_msg"]); st.cache_data.clear(); st.rerun()
             except Exception as e: st.error(f"Render Error: {str(e)}")
 
-        # --- [메뉴 핸들링] ---
+        # --- [각 메뉴 핸들링] ---
         if menu == L["m1"]: render_form(EVAL_DATA[lang], "self", target_name=user)
         elif menu == L["m5"]: render_form(LEADER_DATA[lang], "ld_self", ws_name="Leadership_Results", target_name=user)
         elif menu == L["m2"]:
