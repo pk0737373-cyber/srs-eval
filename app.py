@@ -11,7 +11,7 @@ INITIAL_PW = "12345678!"
 ADMIN_INFO = "경영관리부 권정순 이사 (010-2912-1408)"
 
 def check_password_strength(pw):
-    """보안 정책: 8자 이상, 영문, 숫자, 특수문자 조합 필수"""
+    """비밀번호 정책: 8자 이상, 영문, 숫자, 특수문자 조합 필수"""
     if len(pw) < 8: return False
     if not re.search("[a-zA-Z]", pw): return False
     if not re.search("[0-9]", pw): return False
@@ -22,7 +22,7 @@ def check_password_strength(pw):
 st.set_page_config(page_title="SRS Global HR System", layout="wide")
 conn = st.connection("gsheets", type=GSheetsConnection)
 
-@st.cache_data(ttl=60) # 429 Quota 에러 방지를 위한 60초 캐시 (시스템 안정화의 핵심)
+@st.cache_data(ttl=60) # 429 Quota 에러 방지를 위한 60초 캐시 (접속 폭주 시 필수)
 def get_data_cached(worksheet_name):
     try:
         df = conn.read(worksheet=worksheet_name, ttl=0)
@@ -30,7 +30,7 @@ def get_data_cached(worksheet_name):
             return df.apply(lambda x: x.str.strip() if x.dtype == "object" else x).fillna("")
         return pd.DataFrame()
     except Exception as e:
-        st.error(f"⚠️ 데이터 연결 지연 발생: 잠시 후 새로고침(F5) 해주세요. ({str(e)})")
+        st.error(f"⚠️ 데이터베이스 연결 지연 발생: 잠시 후 새로고침(F5) 해주세요. ({str(e)})")
         return pd.DataFrame()
 
 # --- [2] 평가 데이터 (이사님 설계안 상세 문구 100% 무삭제 복구) ---
@@ -263,12 +263,12 @@ if not db_raw.empty:
     elif st.session_state.need_pw_change:
         L = UI[st.session_state.lang]
         st.title(L["pw_change"])
-        st.warning("영문, 숫자, 특수문자를 포함하여 8자 이상으로 변경해야 합니다.")
+        st.warning("정책: 영문+숫자+특수문자 포함 8자 이상 필수")
         with st.form("pw_form"):
             new_p = st.text_input("New PW", type="password"); confirm_p = st.text_input("Confirm", type="password")
             if st.form_submit_button("Change"):
-                if not check_password_strength(new_p): st.error("⚠️ 정책 미달 (영문+숫자+특수문자 조합 8자 이상 필수)")
-                elif new_p != confirm_p: st.error("⚠️ 비밀번호가 서로 다릅니다.")
+                if not check_password_strength(new_p): st.error("⚠️ 정책 미달 (조합 필수)")
+                elif new_p != confirm_p: st.error("⚠️ 비밀번호 불일치")
                 else:
                     db_f = conn.read(worksheet="Users", ttl=0)
                     db_f.loc[db_f['성명'] == st.session_state.user, '비밀번호'] = str(new_p)
@@ -306,14 +306,14 @@ if not db_raw.empty:
                 check_df = res_df if ws_name == "Results" else ld_df
                 existing = check_df[(check_df['평가자']==user) & (check_df['피평가자']==target_name)] if not check_df.empty else pd.DataFrame()
                 
-                # [5번 수정] Draft가 있어도 Final(최종)이 없으면 입력 화면 열기
+                # [수정] Draft가 있어도 Final(최종)이 없으면 입력 화면 열기
                 is_final_done = not existing[existing['구분'].str.contains("Final|최종", na=False) & ~existing['구분'].str.contains("Draft", na=False)].empty
                 draft_vals = existing[existing['구분'].str.contains("Draft", na=False)] if not existing.empty else pd.DataFrame()
 
                 if is_final_done: st.success(L["already"])
                 else:
                     if not draft_vals.empty: st.warning("⚠️ Loaded temporary saved data.")
-                    with st.form(key=f"f_long_{pre}_{target_name}_{ws_name}"):
+                    with st.form(key=f"f_final_v2_{pre}_{target_name}"):
                         tabs = st.tabs(list(data_dict.keys()))
                         res_dict = {}
                         for i, (major, subs) in enumerate(data_dict.items()):
@@ -338,7 +338,7 @@ if not db_raw.empty:
                                     r = st.text_area(L["basis"], key=f"r3_{target_name}_{major}")
                                     res_dict[major] = {"score": s, "basis": r}
                                 else:
-                                    # [백화현상 해결] 3계층 데이터를 끝까지 그리는 튼튼한 루프
+                                    # [핵심] 본인이 입력한 Draft 점수와 근거를 초기값으로 세팅
                                     for sub_key, items in subs.items():
                                         if isinstance(items, dict):
                                             st.markdown(f"#### 📍 {sub_key}")
@@ -354,7 +354,6 @@ if not db_raw.empty:
                                                 r = c4.text_input(L["basis"], value=init_b, placeholder=L["basis_msg"], key=f"r_{target_name}_{it}_{ws_name}")
                                                 res_dict[it] = {"score": s, "basis": r}
                                         else:
-                                            # 리더십 일부 구조 대응
                                             saved = draft_vals[draft_vals['항목']==sub_key] if not draft_vals.empty else pd.DataFrame()
                                             init_s = int(pd.to_numeric(saved['점수'], errors='coerce').iloc[0]) if not saved.empty else 3
                                             init_b = str(saved.iloc[0]['근거']) if not saved.empty else ""
@@ -363,7 +362,7 @@ if not db_raw.empty:
                                             r = c4.text_input(L["basis"], value=init_b, placeholder=L["basis_msg"], key=f"r_{target_name}_{sub_key}_{ws_name}")
                                             res_dict[sub_key] = {"score": s, "basis": r}
 
-                        if pre == "self": # 영문에서도 REPORT 출력되도록 통합
+                        if pre == "self": 
                             st.divider(); st.subheader(L["report_title"])
                             rep_data = {}
                             for k, v in REPORT_QS[lang].items():
@@ -374,7 +373,6 @@ if not db_raw.empty:
                         btn_s, btn_f = bc1.form_submit_button(L["save"]), bc2.form_submit_button(L["sub"])
                         if btn_s or btn_f:
                             is_f = btn_f
-                            # [4번 수정] 근거 5자 이상 필수 입력 검증
                             if is_f and any(len(str(v["basis"]).strip()) < 5 for v in res_dict.values()): st.error(L["err"])
                             else:
                                 now = (datetime.datetime.now()+timedelta(hours=9)).strftime("%Y-%m-%d %H:%M")
