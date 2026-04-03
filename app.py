@@ -35,7 +35,7 @@ def get_results_data(ws_name):
         return df.apply(lambda x: x.str.strip() if x.dtype == "object" else x).fillna("")
     except: return pd.DataFrame()
 
-# --- [2] 평가 지표 데이터 (KO/EN 무삭제 풀버전) ---
+# --- [2] 평가 지표 데이터 (이사님 설계 원문 100% 무삭제 복구) ---
 EVAL_DATA = {
     "KO": {
         "1. 업무실적": {
@@ -50,7 +50,7 @@ EVAL_DATA = {
                 "꼼꼼함": "철저하고 뒷처리를 잘하는가?"
             }
         },
-        "2. 근무태도": {
+    "2. 근무태도": {
             "협조성": {
                 "횡적협조": "스스로 동료와 협력하며 조직체의 능률향상에 공헌하는가?",
                 "존중": "자신의 생각보다는 팀(동료) 전체의 의견을 존중하는가?",
@@ -63,37 +63,41 @@ EVAL_DATA = {
             },
             "복무상황": {
                 "규율": "규칙을 준수하며 직장질서유지에 애쓰는가?",
-                "DB화": "정기적인 업무보고와 본인업무에 대한 데이터의 체계적인 관리",
+                "DB화": "정기적인 업무보고와 본인업무에 대한 데이터의 체계적인 관리(공유드라이브 등)",
                 "근태상황": "지각, 조퇴, 결근 등 상황은 어떤가?"
             }
         },
         "3. 직무능력": {
-            "지식": {
-                "직무지식": "담당업무의 지식이 넓고 깊은가?",
-                "관련지식": "관련업무에 대한 기초지식은 넓고 깊은가?"
-            },
+            "지식": {"직무지식": "담당업무의 지식이 넓고 깊은가?", "관련지식": "관련업무에 대한 기초지식은 넓고 깊은가?"},
             "이해판단력": {
                 "신속성": "규정, 지시, 자료 등을 바르게 이해하는 속도는 어떤가?",
                 "타당성": "내린 결론은 정확하며 타당한가?",
-                "문제해결": "문제 발생 시 문제의 본질을 정확히 파악하여 효과적인 해결을 주도하는가?",
+                "문제해결": "문제의 본질을 정확히 파악하여 효과적인 해결을 주도하는가?",
                 "통찰력": "사물의 요점을 파악하며 자주적으로 결론을 내릴 수 있는가?"
             },
-            "창의연구력": {"연구개선": "항상 창의적인 아이디어를 살리고 일의 순서개선이나 전진을 도모하고 있는가?"},
+            "창의연구력": {"연구개선": "창의적인 아이디어를 살리고 일의 순서개선이나 전진을 도모하는가?"},
             "표현절충": {
-                "구두표현": "구두에 의한 표현이 능숙하며 알기 쉽고 정확한가?",
-                "문장표현": "문장에 의한 표현이 능숙하며 알기 쉽고 정확한가?",
-                "절충": "대내외 관계자들과의 교섭을 원활하게 처리하는 능력은 어떤가?"
+                "구두표현": "구두 표현이 능숙하며 알기 쉽고 정확한가?",
+                "문장표현": "문장 표현이 능숙하며 알기 쉽고 정확한가?",
+                "절충": "대내외 관계자들과의 교섭을 원활하게 처리하는가?"
             }
         }
     },
     "EN": {
         "1. Performance": {
-            "Quantity": { "Speed": "Quickly processed?", "Persistence": "Consistent?", "Efficiency": "Efficient?" },
-            "Quality": { "Accuracy": "Reliable results?", "Achievement": "Outstanding?", "Thoroughness": "Thorough follow-up?" }
+            "Quantity": {"Speed": "Quickly processed?", "Persistence": "Consistently?", "Efficiency": "Efficiently?"},
+            "Quality": {"Accuracy": "Reliable results?", "Achievement": "Outstanding?", "Thoroughness": "Thorough?"}
         },
         "2. Work Attitude": {
-            "Cooperation": { "Horizontal": "Cooperate?", "Respect": "Respect team?", "Supervisor": "Effective co-op?" },
-            "Motivation": { "Proactivity": "Engagement?", "Responsibility": "Sincere?", "Research": "Deep research?" }
+            "Cooperation": {"Horizontal": "Cooperate?", "Respect": "Respect team?", "Supervisor": "Effective co-op?"},
+            "Motivation": {"Proactivity": "Engagement?", "Responsibility": "Sincere?", "Research": "Deep research?"},
+            "Compliance": {"Discipline": "Follow rules?", "Data Mgmt": "Systematic?", "Attendance": "Status?"}
+        },
+        "3. Competency": {
+            "Knowledge": {"Job": "Broad?", "Related": "Basic?"},
+            "Judgment": {"Speed": "Understanding?", "Validity": "Accurate?", "Solving": "Solutions?", "Insight": "Independent?"},
+            "Creativity": {"Improvement": "Seek improvements?"},
+            "Communication": {"Verbal": "Clear?", "Written": "Accurate?", "Negotiation": "Coordination?"}
         }
     }
 }
@@ -110,22 +114,27 @@ LEADER_DATA = {
         "2. 업무실적(실행역량)": {
             "업무실적": {
                 "개방적 의사소통": "상대방이 친밀감을 느낄 수 있도록 자신의 사적인 부분을 먼저 이야기한다.",
-                "문제해결": "문제 발생 시 문제상황과 관련된 정보와 자료를 수집하고 분석하여 문제의 근본원인을 규명한다.",
+                "문제해결": "문제 발생 시 정보와 자료를 분석하여 근본원인을 규명한다.",
                 "조직이해": "조직의 전략, 운영방식, 역사 등을 파악한다.",
-                "프로젝트 관리": "프로젝트와 관련된 정보를 체계적으로 수집, 분석하여 계획을 수립한다."
+                "프로젝트 관리": "프로젝트 관련 정보를 체계적으로 수집 분석하여 계획을 수립한다."
             }
         },
         "3. 지식(전문역량)": {
             "지식": {
                 "분석적사고": "문제를 해결하기 위해 필요한 정보나 자료가 무엇인지 정확히 파악한다.",
-                "세밀한업무처리": "문제 발생 소지를 최소화하기 위해 조직의 관련 규정이나 과거 관행 등을 조사한다."
+                "세밀한업무처리": "조직의 관련 규정이나 과거 관행 등을 조사한다."
             }
         }
     }
 }
-# [1/2편 코드 바로 아래에 붙여넣으세요]
+# [2/3]번 코드 바로 아래에 이어서 붙여넣으세요
 
-NORMAL_MAPPING = {"속도":"업무의 양","지속성":"업무의 양","능률":"업무의 양","정확성":"업무의 질","성과":"업무의 질","꼼꼼함":"업무의 질","횡적협조":"협조성","존중":"협조성","상사와외 협조":"협조성","적극성":"근무의욕","책임감":"근무의욕","연구심":"근무의욕","규율":"복무상황","DB화":"복무상황","근태상황":"복무상황","직무지식":"지식","관련지식":"지식","신속성":"이해판단력","타당성":"이해판단력","문제해결":"이해판단력","통찰력":"이해판단력","연구개선":"창의연구력","구두표현":"표현절충","문장표현":"표현절충","절충":"표현절충"}
+NORMAL_MAPPING = {
+    "속도":"업무의 양","지속성":"업무의 양","능률":"업무의 양","정확성":"업무의 질","성과":"업무의 질","꼼꼼함":"업무의 질",
+    "횡적협조":"협조성","존중":"협조성","상사와외 협조":"협조성","적극성":"근무의욕","책임감":"근무의욕","연구심":"근무의욕",
+    "규율":"복무상황","DB화":"복무상황","근태상황":"복무상황","직무지식":"지식","관련지식":"지식","신속성":"이해판단력",
+    "타당성":"이해판단력","문제해결":"이해판단력","통찰력":"이해판단력","연구개선":"창의연구력","구두표현":"표현절충","문장표현":"표현절충","절충":"표현절충"
+}
 
 UI = {
     "KO": {
@@ -133,7 +142,16 @@ UI = {
         "m5": "🚀 리더십 자기평가", "m6": "🎖️ 2차 리더십평가", "m8": "📈 팀원 점수 누계(∑)",
         "save": "💾 임시 저장", "sub": "✅ 최종 제출", "logout": "🔓 로그아웃", "score": "점수", "basis": "근거",
         "err_null": "⚠️ [제출 불가] 점수 선택 및 근거(5자 이상)를 상세히 작성해 주세요.",
-        "already": "✅ 최종 제출 완료 (조회 모드)", "ref_1": "👤 팀원(1차):", "ref_2": "👥 리더(2차):"
+        "already": "✅ 최종 제출 완료 (조회 모드)", "ref_1": "👤 팀원(1차):", "ref_2": "👥 리더(2차):",
+        "total_info": "👤 **팀원 자기평가 합계: {s}점 / {m}점 만점** (자기 객관화 확인용)"
+    },
+    "EN": {
+        "m1": "📝 Self-Evaluation", "m2": "👥 2nd Peer Eval", "m3": "⚖️ 3rd Final Eval", "m4": "📊 Admin Panel(⏳)",
+        "m5": "🚀 Leadership Self-Eval", "m6": "🎖️ 2nd Lead Eval", "m8": "📈 Team Summary(∑)",
+        "save": "💾 Save Draft", "sub": "✅ Final Submit", "logout": "🔓 Logout", "score": "Score", "basis": "Basis",
+        "err_null": "⚠️ [Failed] Please provide all scores and details (min 5 chars).",
+        "already": "✅ Submission Completed.", "ref_1": "👤 Self(1st):", "ref_2": "👥 Leader(2nd):",
+        "total_info": "👤 **Self-Evaluation Total: {s} / {m} max**"
     }
 }
 
@@ -152,7 +170,7 @@ def save_data_engine(recs, user_id, target_id, is_final, ws_name="Results"):
 
 def render_engine(data_dict, pre, eval_type="자기", ws_name="Results", target_name=None):
     if not target_name: return
-    L = UI["KO"]
+    L = UI[st.session_state.lang]
     check_df = get_results_data(ws_name)
     existing = check_df[(check_df['평가자']==st.session_state.user) & (check_df['피평가자']==target_name)] if not check_df.empty else pd.DataFrame()
     is_final_done = not existing[existing['구분'].str.contains("Final", na=False)].empty
@@ -170,30 +188,38 @@ def render_engine(data_dict, pre, eval_type="자기", ws_name="Results", target_
         for i, major in enumerate(data_dict.keys()):
             with tabs[i]:
                 if eval_type == "3차최종":
-                    st.markdown(f"### 🎯 {major} 종합 평가 (참조형)")
+                    # --- [이사님 요청] 팀원 자기평가 점수 합산 로직 ---
+                    sub_items = []
+                    for cat in data_dict[major].values(): sub_items.extend(list(cat.keys()))
+                    self_scores = ref_self[ref_self['항목'].isin(sub_items)]['점수'].apply(pd.to_numeric, errors='coerce').fillna(0)
+                    
+                    st.markdown(f"### 🎯 {major}")
+                    st.info(L["total_info"].format(s=int(self_scores.sum()), m=len(sub_items)*5))
+                    
                     for sub_cat, items in data_dict[major].items():
                         st.write(f"**[{sub_cat}]**")
                         for it_n in items.keys():
                             s_v = ref_self[ref_self['항목']==it_n]['점수'].values[0] if it_n in ref_self['항목'].values else "-"
                             p_v = ref_peer[ref_peer['항목']==it_n]['점수'].values[0] if it_n in ref_peer['항목'].values else "-"
-                            st.caption(f"• {it_n} ➔ {L['ref_1']} {s_v}점 | {L['ref_2']} {p_v}점")
+                            st.caption(f"• {it_n} ➔ {L['ref_1']} {s_v} | {L['ref_2']} {p_v}")
+                    
                     d_r = draft_vals[draft_vals['항목']==major]
                     init_s, init_b = (int(d_r.iloc[0]['점수']), str(d_r.iloc[0]['근거'])) if not d_r.empty else (0, "")
                     c1, c2 = st.columns([1, 4])
-                    s = c1.selectbox(f"{major} {L['score']}", [0,1,2,3,4,5], index=init_s, key=f"s_{pre}_{major}_{target_name}")
-                    r = c2.text_input(f"{major} {L['basis']}", value=init_b, key=f"r_{pre}_{major}_{target_name}")
+                    s = c1.selectbox(L["score"], [0,1,2,3,4,5], index=init_s, key=f"s_{pre}_{major}_{target_name}")
+                    r = c2.text_input(L["basis"], value=init_b, key=f"r_{pre}_{major}_{target_name}")
                     res_dict[major] = {"score": s, "basis": r}
                 else:
                     for sub_k, items in data_dict[major].items():
                         st.markdown(f"#### 📍 {sub_k}")
                         for it, crit in items.items():
                             r_v = ref_self[ref_self['항목']==it]
-                            team_ref = f"({r_v.iloc[0]['점수']}점) {r_v.iloc[0]['근거']}" if not r_v.empty else "의견 없음"
+                            team_ref = f"({r_v.iloc[0]['점수']} pts) {r_v.iloc[0]['근거']}" if not r_v.empty else "N/A"
                             d_r = draft_vals[draft_vals['항목']==it]
                             init_s, init_b = (int(d_r.iloc[0]['점수']), str(d_r.iloc[0]['근거'])) if not d_r.empty else (0, "")
                             c1, c2, c3 = st.columns([3, 1, 3])
                             c1.markdown(f"**{it}**\n\n{crit}")
-                            if pre != "self": c1.caption(f"👤 팀원: {team_ref}")
+                            if pre != "self": c1.caption(f"{L['ref_1']} {team_ref}")
                             s = c2.selectbox(L["score"], [0,1,2,3,4,5], index=init_s, key=f"s_{pre}_{it}_{target_name}")
                             r = c3.text_input(L["basis"], value=init_b, key=f"r_{pre}_{it}_{target_name}")
                             res_dict[it] = {"score": s, "basis": r}
@@ -207,25 +233,25 @@ def render_engine(data_dict, pre, eval_type="자기", ws_name="Results", target_
                 now = (datetime.datetime.now()+timedelta(hours=9)).strftime("%Y-%m-%d %H:%M")
                 recs = [{"시간":now,"평가자":st.session_state.user,"피평가자":target_name,"구분":f"{eval_type}({'Final' if is_f else 'Draft'})","항목":k,"점수":v["score"],"근거":v["basis"]} for k,v in res_dict.items()]
                 if save_data_engine(recs, st.session_state.user, target_name, is_f, ws_name):
-                    st.success("완료!"); time.sleep(1); st.rerun()
+                    st.success("Success!"); time.sleep(1); st.rerun()
 
 def render_admin_status():
-    st.title("📊 전사 인사평가 완료 현황판")
+    st.title(UI[st.session_state.lang]["m4"])
     db_u = get_user_data(); res_df = get_results_data("Results"); ld_df = get_results_data("Leadership_Results")
     done_self = res_df[res_df['구분'].str.contains("자기\(Final\)", na=False)]['평가자'].unique()
     done_lead = ld_df[ld_df['구분'].str.contains("리더십\(Final\)", na=False)]['평가자'].unique()
-    status_data = [{"성명": r['성명'], "부서": r['부서'], "자기평가": "✅" if r['성명'] in done_self else "⏳", "리더십평가": "✅" if r['성명'] in done_lead else "⏳" if r['리더여부'] == 'Y' else "-"} for _, r in db_u.iterrows()]
+    status_data = [{"Name": r['성명'], "Dept": r['부서'], "Self": "✅" if r['성명'] in done_self else "⏳", "Lead": "✅" if r['성명'] in done_lead else "⏳" if r['리더여부'] == 'Y' else "-"} for _, r in db_u.iterrows()]
     st.table(pd.DataFrame(status_data))
 
 def render_leader_summary():
-    st.subheader("📊 나의 팀원 평가 점수 누계 (카테고리별)")
+    st.subheader(UI[st.session_state.lang]["m8"])
     df = get_results_data("Results"); my_evals = df[df['평가자'] == st.session_state.user].copy()
-    if my_evals.empty: st.info("데이터가 없습니다."); return
+    if my_evals.empty: st.info("No Data."); return
     my_evals['Category'] = my_evals['항목'].map(NORMAL_MAPPING)
     summary_df = my_evals.dropna(subset=['Category']).copy()
     summary_df['점수'] = pd.to_numeric(summary_df['점수'], errors='coerce').fillna(0)
     summary = summary_df.pivot_table(index='피평가자', columns='Category', values='점수', aggfunc='sum').fillna(0)
-    summary['총합계'] = summary.sum(axis=1)
+    summary['Total'] = summary.sum(axis=1)
     st.dataframe(summary, use_container_width=True)
 
 if 'auth' not in st.session_state: st.session_state.update({'auth':False, 'user':'', 'ldr':'N', 'lang':'KO'})
@@ -238,11 +264,11 @@ if not db_users.empty:
         if st.button("Login"):
             u = db_users[db_users['성명'] == n.strip()]
             if not u.empty and str(p).strip() == str(u.iloc[0]['비밀번호']).strip():
-                st.session_state.update({'auth':True, 'user':n.strip(), 'ldr':str(u.iloc[0]['리더여부']).upper(), 'lang':"KO"})
+                st.session_state.update({'auth':True, 'user':n.strip(), 'ldr':str(u.iloc[0]['리더여부']).upper(), 'lang':str(u.iloc[0]['언어'])})
                 st.rerun()
             else: st.error("Login Fail")
     else:
-        L, user = UI["KO"], st.session_state.user
+        L, user = UI[st.session_state.lang], st.session_state.user
         if st.sidebar.button(L["logout"]): st.session_state.clear(); st.rerun()
         m_list = []
         if user != "김용환": m_list.append(L["m1"])
@@ -258,14 +284,14 @@ if not db_users.empty:
         menu = st.sidebar.radio("Menu", m_list)
         if menu == L["m4"]: render_admin_status()
         elif menu == L["m8"]: render_leader_summary()
-        elif menu == L["m1"]: st.title(L["m1"]); render_engine(EVAL_DATA["KO"], "self", target_name=user)
-        elif menu == L["m5"]: st.title(L["m5"]); render_engine(LEADER_DATA["KO"], "ld_self", eval_type="리더십", ws_name="Leadership_Results", target_name=user)
+        elif menu == L["m1"]: st.title(L["m1"]); render_engine(EVAL_DATA[st.session_state.lang], "self", target_name=user)
+        elif menu == L["m5"]: st.title(L["m5"]); render_engine(LEADER_DATA[st.session_state.lang], "ld_self", eval_type="리더십", ws_name="Leadership_Results", target_name=user)
         elif menu == L["m2"]:
-            st.title(L["m2"]); target = st.selectbox("대상 선택", t2_list) if t2_list else None
-            if target: render_engine(EVAL_DATA["KO"], "peer2", eval_type="2차팀원", target_name=target)
+            st.title(L["m2"]); target = st.selectbox("Target", t2_list) if t2_list else None
+            if target: render_engine(EVAL_DATA[st.session_state.lang], "peer2", eval_type="2차팀원", target_name=target)
         elif menu == L["m3"]:
-            st.title(L["m3"]); target = st.selectbox("최종 선택", t3_list) if t3_list else None
-            if target: render_engine(EVAL_DATA["KO"], "peer3", eval_type="3차최종", target_name=target)
+            st.title(L["m3"]); target = st.selectbox("Final Target", t3_list) if t3_list else None
+            if target: render_engine(EVAL_DATA[st.session_state.lang], "peer3", eval_type="3차최종", target_name=target)
         elif menu == L["m6"]:
-            st.title(L["m6"]); target = st.selectbox("리더십 평가 대상", ldr_t2) if ldr_t2 else None
-            if target: render_engine(LEADER_DATA["KO"], "ld_peer2", eval_type="2차리더십", ws_name="Leadership_Results", target_name=target)
+            st.title(L["m6"]); target = st.selectbox("Lead Target", ldr_t2) if ldr_t2 else None
+            if target: render_engine(LEADER_DATA[st.session_state.lang], "ld_peer2", eval_type="2차리더십", ws_name="Leadership_Results", target_name=target)
