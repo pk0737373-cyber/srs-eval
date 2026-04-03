@@ -11,33 +11,29 @@ INITIAL_PW = "12345678!"
 ADMIN_INFO = "경영관리부 권정순 이사 (010-2912-1408)"
 
 def check_password_strength(pw):
-    """보안 강화: 8자 이상, 영문, 숫자, 특수문자 필수"""
+    """보안 정책: 8자 이상, 영문, 숫자, 특수문자 조합 필수"""
     if len(pw) < 8: return False
     if not re.search("[a-zA-Z]", pw): return False
     if not re.search("[0-9]", pw): return False
     if not re.search("[!@#$%^&*(),.?\":{}|<>]", pw): return False
     return True
 
-# --- [1] 기본 설정 및 연결 안전장치 ---
+# --- [1] 기본 설정 및 안정화(Cache) 로직 ---
 st.set_page_config(page_title="SRS Global HR System", layout="wide")
 conn = st.connection("gsheets", type=GSheetsConnection)
 
-def get_data_fresh(worksheet_name, retries=3):
-    """구글 시트 연결 실패 시 재시도 로직 포함"""
-    for i in range(retries):
-        try:
-            df = conn.read(worksheet=worksheet_name, ttl=0)
-            if df is not None:
-                return df.apply(lambda x: x.str.strip() if x.dtype == "object" else x).fillna("")
-        except Exception as e:
-            if i == retries - 1:
-                st.error(f"⚠️ {worksheet_name} 데이터 로딩 실패: {str(e)}")
-                return pd.DataFrame()
-            time.sleep(1) # 1초 대기 후 재시도
-    return pd.DataFrame()
+@st.cache_data(ttl=15) # 429 Quota 에러 방지 (15초 캐시)
+def get_data_cached(worksheet_name):
+    try:
+        df = conn.read(worksheet=worksheet_name, ttl=0)
+        if df is not None:
+            return df.apply(lambda x: x.str.strip() if x.dtype == "object" else x).fillna("")
+        return pd.DataFrame()
+    except Exception as e:
+        st.error(f"⚠️ 데이터 연결 지연: 잠시 후 새로고침(F5) 해주세요. ({str(e)})")
+        return pd.DataFrame()
 
-# --- [2] 평가 데이터 (상세 지표 100% 무삭제 복구 - 850라인 규모) ---
-# 일반 직원 평가 지표
+# --- [2] 평가 데이터 (상세 지표 100% 무삭제 복구) ---
 EVAL_DATA = {
     "KO": {
         "1. 업무실적": {
@@ -143,7 +139,6 @@ EVAL_DATA = {
     }
 }
 
-# 리더십 평가 지표
 LEADER_DATA = {
     "KO": {
         "1. 리더십(기본역량)": {
@@ -194,14 +189,8 @@ LEADER_DATA = {
 }
 
 # --- [3] 매핑 및 UI 사전 ---
-NORMAL_MAPPING = {
-    "속도": "업무의 양", "지속성": "업무의 양", "능률": "업무의 양", "정확성": "업무의 질", "성과": "업무의 질", "꼼꼼함": "업무의 질",
-    "횡적협조": "협조성", "존중": "협조성", "상사와외 협조": "협조성", "적극성": "근무의욕", "책임감": "근무의욕", "연구심": "근무의욕",
-    "규율": "복무상황", "DB화": "복무상황", "근태상황": "복무상황", "직무지식": "지식", "관련지식": "지식",
-    "신속성": "이해판단력", "타당성": "이해판단력", "문제해결": "이해판단력", "통찰력": "이해판단력", "연구개선": "창의연구력",
-    "구두표현": "표현절충", "문장표현": "표현절충", "절충": "표현절충"
-}
-LEADER_MAPPING = {"고객지향": "리더십", "책임감": "리더십", "팀워크지향": "리더십", "개방적 의사소통": "업무실적", "문제해결": "업무실적", "조직이해": "업무실적", "프로젝트 관리": "업무실적", "분석적사고": "지식", "세밀한업무처리": "지식"}
+NORMAL_MAPPING = {"속도":"업무의 양","지속성":"업무의 양","능률":"업무의 양","정확성":"업무의 질","성과":"업무의 질","꼼꼼함":"업무의 질","횡적협조":"협조성","존중":"협조성","상사와외 협조":"협조성","적극성":"근무의욕","책임감":"근무의욕","연구심":"근무의욕","규율":"복무상황","DB화":"복무상황","근태상황":"복무상황","직무지식":"지식","관련지식":"지식","신속성":"이해판단력","타당성":"이해판단력","문제해결":"이해판단력","통찰력":"이해판단력","연구개선":"창의연구력","구두표현":"표현절충","문장표현":"표현절충","절충":"표현절충"}
+LEADER_MAPPING = {"고객지향":"리더십","책임감":"리더십","팀워크지향":"리더십","개방적 의사소통":"업무실적","문제해결":"업무실적","조직이해":"업무실적","프로젝트 관리":"업무실적","분석적사고":"지식","세밀한업무처리":"지식"}
 
 REPORT_QS = {
     "KO": {"q1": "1. 평가 기간동안 내가 낸 성과는 무엇입니까?", "q2": "2. 평가 기간동안 내가 습득한 지식이 무엇입니까?", "q3": "3. 평가 기간동안 내가 인재 양성을 위하여 무엇을 하였습니까?"},
@@ -233,9 +222,10 @@ UI = {
     }
 }
 
-# --- [4] 데이터 처리 함수 ---
+# --- [4] 데이터 저장 함수 ---
 def save_with_cleanup(recs, user_id, target_id, is_final, ws_name="Results"):
     try:
+        # 저장 시에는 실시간 데이터를 위해 캐시 없이 직접 로드
         df = conn.read(worksheet=ws_name, ttl=0).fillna("")
         if not df.empty:
             df = df.apply(lambda x: x.str.strip() if x.dtype == "object" else x)
@@ -244,19 +234,17 @@ def save_with_cleanup(recs, user_id, target_id, is_final, ws_name="Results"):
         new_data = pd.DataFrame(recs)
         new_data['점수'] = pd.to_numeric(new_data['점수'], errors='coerce').fillna(0)
         f_df = pd.concat([df, new_data], ignore_index=True)
-        conn.update(worksheet=ws_name, data=f_df); st.cache_data.clear()
+        conn.update(worksheet=ws_name, data=f_df)
+        st.cache_data.clear() # 저장 후 캐시 초기화
         return True
     except: return False
 
-# --- [5] 메인 엔진 가동 ---
+# --- [5] 메인 시스템 엔진 ---
 if 'auth' not in st.session_state: st.session_state.update({'auth':False, 'user':'', 'ldr':'N', 'lang':'KO', 'need_pw_change':False})
 
-db_raw = get_data_fresh("Users")
+db_raw = get_data_cached("Users")
 
-if db_raw.empty:
-    st.error("⚠️ 시스템 데이터베이스 연결에 실패했습니다. 페이지를 새로고침(F5) 해주세요.")
-    if st.button("🔄 시스템 다시 불러오기"): st.rerun()
-else:
+if not db_raw.empty:
     if not st.session_state.auth:
         st.title("🛡️ Smart Radar System HR")
         n, p = st.text_input("Name"), st.text_input("PW", type="password")
@@ -275,11 +263,11 @@ else:
     elif st.session_state.need_pw_change:
         L = UI[st.session_state.lang]
         st.title(L["pw_change"])
-        st.warning("영문, 숫자, 특수문자를 모두 포함하여 8자 이상으로 변경해야 합니다.")
+        st.warning("정책: 영문+숫자+특수문자 조합 8자 이상 필수")
         with st.form("pw_form"):
             new_p = st.text_input("New PW", type="password"); confirm_p = st.text_input("Confirm", type="password")
-            if st.form_submit_button("Change and Start"):
-                if not check_password_strength(new_p): st.error("⚠️ 보안 취약 (영문+숫자+특수문자 조합 8자 이상 필수)")
+            if st.form_submit_button("Change"):
+                if not check_password_strength(new_p): st.error("⚠️ 보안 취약 (조합 필수)")
                 elif new_p != confirm_p: st.error("⚠️ 비밀번호 불일치")
                 else:
                     db_f = conn.read(worksheet="Users", ttl=0)
@@ -290,7 +278,7 @@ else:
     else:
         lang = st.session_state.lang if st.session_state.lang in UI else "KO"
         L, user = UI[lang], st.session_state.user
-        res_df, ld_df = get_data_fresh("Results"), get_data_fresh("Leadership_Results")
+        res_df, ld_df = get_data_cached("Results"), get_data_cached("Leadership_Results")
 
         m_list = []
         if user != "김용환":
@@ -317,14 +305,15 @@ else:
             try:
                 check_df = res_df if ws_name == "Results" else ld_df
                 existing = check_df[(check_df['평가자']==user) & (check_df['피평가자']==target_name)] if not check_df.empty else pd.DataFrame()
-                # Draft는 통과, Final/최종이 있을 때만 완료 메시지
+                
+                # [수정] Draft 데이터만 있을 경우 "제출 완료" 메시지를 띄우지 않고 입력 화면 노출
                 is_final_done = not existing[existing['구분'].str.contains("Final|최종", na=False) & ~existing['구분'].str.contains("Draft", na=False)].empty
                 draft_vals = existing[existing['구분'].str.contains("Draft", na=False)] if not existing.empty else pd.DataFrame()
 
                 if is_final_done: st.success(L["already"])
                 else:
                     if not draft_vals.empty: st.warning("⚠️ Loaded temporary saved data.")
-                    with st.form(key=f"f_v3_{pre}_{target_name}"):
+                    with st.form(key=f"f_long_{pre}_{target_name}_{ws_name}"):
                         tabs = st.tabs(list(data_dict.keys()))
                         res_dict = {}
                         for i, (major, subs) in enumerate(data_dict.items()):
@@ -333,26 +322,27 @@ else:
                                     st.subheader(f"🔍 {major} Review")
                                     s_sum, l2_sum, count = 0, 0, 0
                                     for sub_n, sub_items in subs.items():
-                                        st.markdown(f"#### 📍 {sub_n}")
-                                        it_it = sub_items.items() if isinstance(sub_items, dict) else {sub_n: sub_items}.items()
-                                        for it_n, crit in it_it:
+                                        it_iterator = sub_items.items() if isinstance(sub_items, dict) else {sub_n: sub_items}.items()
+                                        for it_n, crit in it_iterator:
                                             s_data = self_info.get(it_n, {"score": 0, "basis": "-"}) if self_info else {"score": 0, "basis": "-"}
                                             l2_data = l2_info.get(it_n, {"score": 0, "basis": "-", "evaluator": ""}) if l2_info else {"score": 0, "basis": "-", "evaluator": ""}
                                             s_sum += pd.to_numeric(s_data['score'], errors='coerce'); l2_sum += pd.to_numeric(l2_data['score'], errors='coerce'); count += 1
                                             st.markdown(f"**{it_n}**")
-                                            c1, c2 = st.columns(2); c1.caption(f"[{L['self_info']}] {s_data['score']} | {s_data['basis']}"); c2.caption(f"[{l2_data.get('evaluator', L['l2_info'])}] {l2_data['score']} | {l2_data['basis']}")
+                                            c1, c2 = st.columns(2)
+                                            c1.caption(f"[{L['self_info']}] {s_data['score']} | {s_data['basis']}")
+                                            c2.caption(f"[{l2_data.get('evaluator', L['l2_info'])}] {l2_data['score']} | {l2_data['basis']}")
                                     max_v = count * 5
-                                    st.info(f"📊 {major} Summary - Self: **{int(s_sum)}점** | 2nd: **{int(l2_sum)}점** | **(Max: {max_v}점)**")
+                                    st.info(f"📊 {major} 요약 - 피평가자: **{int(s_sum)}점** | 2차: **{int(l2_sum)}점** | (만점: **{max_v}점**)")
                                     st.divider()
-                                    # 3차 평가 전용 두 자릿수 직접 입력
-                                    s = st.number_input(f"Final {major} {L['score']} (0~{max_v})", 0, max_v, value=int(l2_sum), key=f"s3_{target_name}_{major}")
+                                    s = st.number_input(f"3차 {major} {L['score']} (0~{max_v})", 0, max_v, value=int(l2_sum), key=f"s3_{target_name}_{major}")
                                     r = st.text_area(L["basis"], key=f"r3_{target_name}_{major}")
                                     res_dict[major] = {"score": s, "basis": r}
                                 else:
-                                    for sub_key, items_or_desc in subs.items():
-                                        if isinstance(items_or_desc, dict):
+                                    # [백화현상 해결] 3계층/2계층 데이터를 유연하게 그리는 렌더링 엔진
+                                    for sub_key, items in subs.items():
+                                        if isinstance(items, dict):
                                             st.markdown(f"#### 📍 {sub_key}")
-                                            for it, crit in items_or_desc.items():
+                                            for it, crit in items.items():
                                                 saved = draft_vals[draft_vals['항목']==it] if not draft_vals.empty else pd.DataFrame()
                                                 init_s = int(pd.to_numeric(saved['점수'], errors='coerce').iloc[0]) if not saved.empty else 3
                                                 init_b = str(saved.iloc[0]['근거']) if not saved.empty else ""
@@ -367,12 +357,12 @@ else:
                                             saved = draft_vals[draft_vals['항목']==sub_key] if not draft_vals.empty else pd.DataFrame()
                                             init_s = int(pd.to_numeric(saved['점수'], errors='coerce').iloc[0]) if not saved.empty else 3
                                             init_b = str(saved.iloc[0]['근거']) if not saved.empty else ""
-                                            c1, c2, c3, c4 = st.columns([2, 4, 1, 3]); c1.markdown(f"**{sub_key}**"); c2.info(items_or_desc)
+                                            c1, c2, c3, c4 = st.columns([2, 4, 1, 3]); c1.markdown(f"**{sub_key}**"); c2.info(items)
                                             s = c3.selectbox(L["score"], [1,2,3,4,5], index=max(0, min(4, init_s-1)), key=f"s_{target_name}_{sub_key}_{ws_name}")
                                             r = c4.text_input(L["basis"], value=init_b, placeholder=L["basis_msg"], key=f"r_{target_name}_{sub_key}_{ws_name}")
                                             res_dict[sub_key] = {"score": s, "basis": r}
 
-                        if pre == "self":
+                        if pre == "self": # 영문에서도 정상 출력되도록 통합
                             st.divider(); st.subheader(L["report_title"])
                             rep_data = {}
                             for k, v in REPORT_QS[lang].items():
@@ -383,6 +373,7 @@ else:
                         btn_s, btn_f = bc1.form_submit_button(L["save"]), bc2.form_submit_button(L["sub"])
                         if btn_s or btn_f:
                             is_f = btn_f
+                            # [핵심] 근거 5자 이상 유효성 검증
                             if is_f and any(len(str(v["basis"]).strip()) < 5 for v in res_dict.values()): st.error(L["err"])
                             else:
                                 now = (datetime.datetime.now()+timedelta(hours=9)).strftime("%Y-%m-%d %H:%M")
